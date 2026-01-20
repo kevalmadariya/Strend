@@ -3,13 +3,19 @@ name = "strend"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
+    "bs4>=0.0.2",
+    "chromadb>=1.4.1",
     "dotenv>=0.9.9",
     "fastapi>=0.128.0",
     "langchain-groq>=1.1.1",
+    "pandas-ta>=0.4.71b0",
+    "playwright>=1.57.0",
     "psycopg2>=2.9.11",
+    "psycopg2-binary>=2.9.11",
     "sentence-transformers>=5.2.0",
     "uvicorn[standard]>=0.40.0",
     "wsproto>=1.3.2",
+    "yfinance>=1.0",
 ]

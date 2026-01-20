@@ -5,6 +5,7 @@ from src.database.agent import find_agent_by_name
 from src.database.conversation import find_conversation_by_id
 from src.database.user import find_user_by_id
 from fastapi import APIRouter
+import json
 
 router = APIRouter()
 manager = ConnectionManager()
@@ -18,20 +19,24 @@ async def websocket_endpoint(
     module: str,
     conversation_id: int
 ):
+    print("Client connected")
     # ------------------------------------------------------------------
     # VALIDATION
     # ------------------------------------------------------------------
     user = find_user_by_id(user_id)
+    print(user)
     if not user:
         await websocket.close(code=1008)
         return
 
     agent = find_agent_by_name(agent_name)
+    print(agent)
     if not agent:
         await websocket.close(code=1008)
         return
 
     conversation = find_conversation_by_id(conversation_id)
+    print(conversation)
     if not conversation:
         await websocket.close(code=1008)
         return
@@ -56,7 +61,8 @@ async def websocket_endpoint(
             )
 
             # Send response back ONLY to this client
-            await websocket.send_text(agent_response)
+            # await websocket.send_text(agent_response)
+            await websocket.send_text(json.dumps(agent_response, default=str))
 
     except WebSocketDisconnect:
         manager.disconnect(websocket)

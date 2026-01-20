@@ -7,6 +7,12 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect,APIRouter
 from typing import List
 from src.controller.agent_ws import router
 from src.core.manager import ConnectionManager
+import asyncio
+import sys
+# --- FIX START ---
+# This forces Windows to use the correct Event Loop for Playwright
+if sys.platform == 'win32':
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 app = FastAPI()
 manager = ConnectionManager()
@@ -64,4 +70,4 @@ app.include_router(router)
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, loop="asyncio")
