@@ -7,7 +7,7 @@ def WebScaping(ticker, ratios, charts, holdings, analysis):
           #utility functions =============================================================
 
           def remove_extra_space_and_characters(input_string):
-            characters_to_remove = [' ','\n', '\t', '\r', '\xa0','Cr.','₹','%'] # Removed 'Promoters\xa0+'
+            characters_to_remove = [' ','\n', '\t', '\r', '\xa0','Cr.','₹','%', '(', ')', '-', ','] # Removed 'Promoters\xa0+'
             output = input_string.strip()
             for char in characters_to_remove:
               output = output.replace(char, '')

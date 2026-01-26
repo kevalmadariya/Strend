@@ -105,7 +105,7 @@ async def fetch_and_store_fundamentals(
                             %s, %s, %s, %s,
                             %s, %s, %s, %s,
                             %s, %s, %s, %s,
-                            %s, %s, %s)
+                            %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (stock_id, date) DO UPDATE
                     SET price = EXCLUDED.price,
                         quickratio = EXCLUDED.quickratio,

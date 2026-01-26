@@ -1,11 +1,16 @@
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
 DB_CONFIG = {
-    "host": "127.0.0.1",
-    "port": 5433,
-    "user": "postgres",
-    "password": "12345",
+    "host": os.getenv("DB_HOST", "127.0.0.1"),
+    "port": int(os.getenv("DB_PORT", 5433)),
+    "user": os.getenv("DB_USER", "postgres"),
+    "password": os.getenv("DB_PASSWORD", "12345"),
 }
 
 

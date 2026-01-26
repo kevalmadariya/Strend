@@ -127,12 +127,12 @@ class ToolVectorDB:
         )
 
         # ---- 3️⃣ Threshold check
-        # if cosine_similarity < similarity_threshold:
-        #     print(
-        #         f"🚫 Similarity {cosine_similarity:.4f} "
-        #         f"< threshold {similarity_threshold}"
-        #     )
-        #     return None
+        if cosine_similarity < similarity_threshold:
+            print(
+                f"🚫 Similarity {cosine_similarity:.4f} "
+                f"< threshold {similarity_threshold}"
+            )
+            return None
 
         print(f"🎯 Tool accepted: {tool_name}")
         return tool_name

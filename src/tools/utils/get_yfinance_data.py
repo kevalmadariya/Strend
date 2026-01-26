@@ -10,6 +10,7 @@ def normalize_ticker(ticker: str) -> str:
 def get_yfinance_data(ticker_symbol):
     try:
         ticker_symbol = normalize_ticker(ticker_symbol)
+        only_ticker = ticker_symbol.split(".")[0]
         stock = yf.Ticker(ticker_symbol)
         info = stock.info
 
@@ -37,7 +38,7 @@ def get_yfinance_data(ticker_symbol):
 
         stock_data = {
             "name": info.get("longName") or info.get("shortName") or ticker_symbol,
-            "ticker": ticker_symbol,
+            "ticker": only_ticker,
             "price": float(current_price),
             "volume": float(info.get("volume") or info.get("regularMarketVolume") or 0),
             "percent_change": float(p_change),
@@ -118,7 +119,7 @@ def get_yfinance_data(ticker_symbol):
 
         return {
             "status": "completed",
-            "results": results
+            "results": stock_data
         }
 
     except Exception as e:

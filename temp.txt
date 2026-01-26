@@ -1,0 +1,18 @@
+The request is coming from playit-cli 0.17.1 with ip address 2409:40c1:1016:999c:180:63a6:9492:150b.
+
+agent name : from-key-5b96
+
+
+letter:
+Started scraping for method: MACD_Bullish
+Success: Extracted and stored 20 stocks.
+[{"ticker": "SILGO-RE1", "stock_name": "SILGO-RE1", "price": 8.28, "percent_change": 39.86, "volume": 27208.0}, {"ticker": "DBOL", "stock_name": "Dhampur Bio Organics Ltd", "price": 95.76, "percent_change": 20.0, "volume": 1473992.0}, {"ticker": "BAIDFIN", "stock_name": "Baid Finserv Ltd", "price": 11.35, "percent_change": 12.94, "volume": 1649199.0}, {"ticker": "CONSOFINVT", "stock_name": "Consolidated Finvest & Holdings Limited", "price": 167.16, "percent_change": 8.96, "volume": 99033.0}, {"ticker": "KITEX", 
+
+here all response comes as last not kind of streaming effect, add streaming effect,and 
+
+first line Started scraping for method: MACD_Bullish
+ also come after 10 sec when all reponse come but i want this at first yeild.
+
+convert it like all yeild comes when they hited and streming.
+
+

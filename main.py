@@ -5,7 +5,11 @@ from datetime import date
 from src.database.generic import insert_one
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect,APIRouter
 from typing import List
-from src.controller.agent_ws import router
+from src.controller.agent_ws import router as ws_router
+from src.controller.auth_controller import router as auth_router
+from src.controller.watchlist_controller import router as watchlist_router
+from src.controller.stock_controller import router as stock_router
+from src.controller.news_controller import router as news_router
 from src.core.manager import ConnectionManager
 import asyncio
 import sys
@@ -15,6 +19,16 @@ if sys.platform == 'win32':
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 app = FastAPI()
+
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 manager = ConnectionManager()
 
 
@@ -66,7 +80,11 @@ def add_database():
     print("Inserted agent_id:", agent_id)
     print("Inserted user_id:", user_id)
 
-app.include_router(router)
+app.include_router(ws_router)
+app.include_router(auth_router)
+app.include_router(watchlist_router)
+app.include_router(stock_router)
+app.include_router(news_router)
 
 if __name__ == "__main__":
     import uvicorn

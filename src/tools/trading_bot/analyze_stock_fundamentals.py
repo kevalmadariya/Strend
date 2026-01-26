@@ -100,11 +100,16 @@ def makeTool(router):
                         "SELECT total_score,score_percentage,rating,risk_level FROM fundamental_results WHERE fundamental_analysis_id = %s",
                         (analysis_id,)
                     )
-                    if cur.fetchone():
-                        r = cur.fetchone()
+                    existing_score = cur.fetchone()
+                    if existing_score:
                         print(f"⏭️ Skipping {ticker}, score already exists.")
                         results_summary.append(
-                            {"ticker": ticker, "risk_level": r[3],"rating":r[2],"scored_percentage":r[1]}
+                            {
+                                "ticker": ticker, 
+                                "risk_level": existing_score[3],
+                                "rating": existing_score[2],
+                                "scored_percentage": existing_score[1]
+                            }
                         )
                         continue
 

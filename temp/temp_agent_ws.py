@@ -1,6 +1,6 @@
 from fastapi import WebSocket, WebSocketDisconnect
 from src.core.manager import ConnectionManager
-from .invoke_agent import invoke_agent, cleanup_agent_session, initialize_agent_session
+from .invoke_agent import invoke_agent, cleanup_agent_session
 from src.database.agent import find_agent_by_name
 from src.database.conversation import find_conversation_by_id
 from src.database.user import find_user_by_id
@@ -47,9 +47,6 @@ async def websocket_endpoint(
     await manager.connect(websocket)
     print(f"Client #{user_id} connected to agent {agent_name}")
 
-    # 🔥 Initialize Agent Immediately on Connection
-    initialize_agent_session(user_id, agent_name, conversation_id)
-    
     try:
         while True:
             # Receive user message

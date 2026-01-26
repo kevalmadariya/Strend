@@ -27,7 +27,8 @@ create_tables_sql = [
     CREATE TABLE IF NOT EXISTS "user" (
         user_id SERIAL PRIMARY KEY,
         name TEXT,
-        email_id TEXT
+        email_id TEXT,
+        password TEXT
     );
     """,
     """
@@ -193,8 +194,10 @@ create_tables_sql = [
         news_id SERIAL PRIMARY KEY,
         stock_id INT REFERENCES stock(stock_id),
         date DATE default CURRENT_DATE,
+        ago INT,
         news TEXT,
-        unique (stock_id, date)
+        url TEXT,
+        unique (stock_id, date, ago)
     );
     """,
     """

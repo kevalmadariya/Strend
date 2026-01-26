@@ -10,20 +10,6 @@ def _make_session_key(user_id: int, agent_name: str, conversation_id: int) -> st
     return f"{user_id}:{agent_name}:{conversation_id}"
 
 
-def initialize_agent_session(
-    user_id: int,
-    agent_name: str,
-    conversation_id: int
-) -> None:
-    """
-    Explicitly initialize the agent session if it doesn't exist.
-    """
-    session_key = _make_session_key(user_id, agent_name, conversation_id)
-    if session_key not in _AGENT_SESSIONS:
-        # This will trigger the __init__ of PlanningAgent, loading tools etc.
-        _AGENT_SESSIONS[session_key] = PlanningAgent(agent_name=agent_name, unique_id=conversation_id)
-
-
 async def invoke_agent(
     user_id: int,
     agent_name: str,

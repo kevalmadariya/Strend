@@ -11,7 +11,7 @@ def makeTool(router):
     
     def func(unique_id):
         
-        async def get_trend_charts_patterns(tickers: List[str], type: str = "both"):
+        async def get_technical_analysis(tickers: List[str], type: str = "both"):
             """
             Calculates trend and chart patterns for given tickers and stores them in the database.
             Using yield for streaming response.
@@ -55,7 +55,7 @@ def makeTool(router):
                     yield f"🔄 Processing {ticker}...\n"
                     
                     # --- 2. Check/Add Stock in DB ---
-                    cur.execute("SELECT stock_id FROM stock WHERE ticker = %s", (ticker,))
+                    cur.execute("SELECT stock_id FROM stock WHERE ticker = %s AND date = CURRENT_DATE", (ticker,))
                     res = cur.fetchone()
                     
                     stock_id = None
@@ -65,12 +65,12 @@ def makeTool(router):
                         yield f"   🆕 Stock {ticker} not found in DB. Fetching info...\n"
                         # Use get_yfinance_data logic to add stock
                         stock_info_res = get_yfinance_data(ticker)
-                        if not stock_info_res: # If failed
-                             yield f"   ⚠️ Could not fetch info for {ticker}. Skipping.\n"
-                             continue
+                        # if not stock_info_res: # If failed
+                        #      yield f"   ⚠️ Could not fetch info for {ticker}. Skipping.\n"
+                        #      continue
                              
                         # Check again
-                        cur.execute("SELECT stock_id FROM stock WHERE ticker = %s", (ticker,))
+                        cur.execute("SELECT stock_id FROM stock WHERE ticker = %s AND date = CURRENT_DATE", (ticker,))
                         res_retry = cur.fetchone()
                         if res_retry:
                             stock_id = res_retry[0]
@@ -118,7 +118,11 @@ def makeTool(router):
                     # Request implies "tool should calculate both and store". 
                     # Table has columns for indicators, so we should calc them.
                     indicators = calculate_indicators(ticker, start_date, end_date)
-
+                    
+                    print("Trend:", trend_val)
+                    print("Patterns:", patterns_str)
+                    print("Indicators:")
+                    print(indicators)
                     # --- 5. Insert into DB ---
                     cur.execute("""
                         INSERT INTO technical_analysis (
@@ -137,8 +141,11 @@ def makeTool(router):
                     """, (
                         stock_id, date.today(), 
                         trend_val, patterns_str,
-                        indicators.get("macd"), indicators.get("macd_signal"), indicators.get("macd_hist"),
-                        indicators.get("rsi"), indicators.get("adx")
+                        float(indicators.get("macd")) if indicators.get("macd") is not None else None,
+                        float(indicators.get("macd_signal")) if indicators.get("macd_signal") is not None else None,
+                        float(indicators.get("macd_hist")) if indicators.get("macd_hist") is not None else None,
+                        float(indicators.get("rsi")) if indicators.get("rsi") is not None else None,
+                        float(indicators.get("adx")) if indicators.get("adx") is not None else None
                     ))
                     conn.commit()
                     
@@ -147,14 +154,15 @@ def makeTool(router):
                         "ticker": ticker,
                         "trend": trend_val,
                         "chart_pattern": patterns_str,
-                        "macd": indicators.get("macd"),
-                        "rsi": indicators.get("rsi"),
-                        "adx": indicators.get("adx"),
+                        "macd": float(indicators.get("macd")) if indicators.get("macd") is not None else None,
+                        "rsi": float(indicators.get("rsi")) if indicators.get("rsi") is not None else None,
+                        "adx": float(indicators.get("adx")) if indicators.get("adx") is not None else None,
                         "source": "calculated"
                     })
 
                 except Exception as loop_err:
                     conn.rollback()
+                    print("Error processing", ticker, loop_err)
                     yield f"   ❌ Error processing {ticker}: {loop_err}\n"
 
             conn.close()
@@ -163,15 +171,15 @@ def makeTool(router):
 
 
         return DynamicTool(
-            name="get_trend_charts_patterns",
-            description="Calculates trend, chart patterns, and indicators for stocks.",
-            triggers=["Get trend and patterns", "Analyze chart patterns"],
-            function=get_trend_charts_patterns,
+            name="get_technical_analysis",
+            description="Calculates trend, chart patterns, and indicators for stocks. RSI, MACD, and ADX indicators for stocks.",
+            triggers=["Get trend and patterns", "Analyze chart patterns","Get RSI MACD ADX", "Calculate indicators"],
+            function=get_technical_analysis,
             parameters=[
                 ToolParam(name="tickers", type="list", required=True, description="List of stock tickers (e.g. ['RELIANCE', 'TCS'])"),
                 ToolParam(name="type", type="string", required=False, description="Analysis type: 'trend', 'chart_patterns', or 'both' (default 'both')")
             ],
-            endpoint="/get-trend-patterns",
+            endpoint="/get-technical-analysis",
             router=router
         )
 

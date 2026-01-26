@@ -9,7 +9,7 @@ from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from sentence_transformers import SentenceTransformer
 
 from src.agent.agents import get_agent_config
-from src.core.vector_db import ToolVectorDB
+# from src.core.vector_db import ToolVectorDB  # <-- Commented out
 
 load_dotenv()
 
@@ -36,14 +36,13 @@ class PlanningAgent:
         print(f"📦 Total tools loaded: {len(self.tools)}")
 
         # --------------------------------------------------
-        # VECTOR DB (PER AGENT)
+        # VECTOR DB (DISABLED)
         # --------------------------------------------------
-        self.vector_db = ToolVectorDB(
-            base_path="./vector_db",
-            agent_name=self.name
-        )
-
-        self.vector_db.sync_agent_tools(self.tools)
+        # self.vector_db = ToolVectorDB(
+        #     base_path="./vector_db",
+        #     agent_name=self.name
+        # )
+        # self.vector_db.sync_agent_tools(self.tools)
 
         # --------------------------------------------------
         # LLM
@@ -53,28 +52,25 @@ class PlanningAgent:
             temperature=0
         )
 
-        self.embedder = SentenceTransformer("all-MiniLM-L6-v2")
+        # self.embedder = SentenceTransformer("all-MiniLM-L6-v2")
 
         # --------------------------------------------------
         # STATE
         # --------------------------------------------------
         self.history = []
-        self.active_tool_name = None
+        # self.active_tool_name = None # No longer relying on sticky tool state, LLM decides
 
         print(f"\n✅ {self.name} ready")
 
     # --------------------------------------------------
-    # ROUTING
+    # HELPER: Get Tools Description
     # --------------------------------------------------
-    def _semantic_route(self, query: str) -> Optional[str]:
-        tool_name = self.vector_db.search(query)
-
-        if tool_name and tool_name in self.tools:
-            print(f"🎯 Router selected tool: {tool_name}")
-            return tool_name
-
-        print("⚠️ No suitable tool found")
-        return None
+    def _get_tools_prompt(self):
+        tools_desc = []
+        for name, tool in self.tools.items():
+            params = ", ".join([f"{p.name} ({'Req' if p.required else 'Opt'})" for p in tool.parameters])
+            tools_desc.append(f"- {name}: {tool.description} | Params: [{params}]")
+        return "\n".join(tools_desc)
 
     # --------------------------------------------------
     # JSON EXTRACTION
@@ -96,35 +92,28 @@ class PlanningAgent:
     async def run(self, user_input: str):
         print(f"\n👤 User: {user_input}")
 
-        # STEP 1: ROUTING
-        if not self.active_tool_name:
-            self.active_tool_name = self._semantic_route(user_input)
-
-        # STEP 2: CHAT
-        if not self.active_tool_name:
-            messages = [
-                SystemMessage(content=self.base_prompt),
-                HumanMessage(content=user_input)
-            ]
-            response = self.llm.invoke(messages)
-            return response.content
-
-        # STEP 3: TOOL FILLING
-        tool_obj = self.tools[self.active_tool_name]
-        print(tool_obj)
-        print(f"\n🛠️ Active tool: {tool_obj.name}")
-
+        # Build dynamic prompt with all tools
+        tools_info = self._get_tools_prompt()
+        
         system_prompt = f"""
-            {self.base_prompt}
-            CURRENT FOCUS: You are using the tool '{tool_obj.name}'.
-            Description: {tool_obj.description}
-            Required Parameters: {tool_obj.parameters}
-            INSTRUCTIONS:
-            1. Check conversation history for parameters.
-            2. If missing, ask user strictly for missing parameters.
-            3. If ALL present, return JSON:
-            {{ "tool": "{tool_obj.name}", "arguments": {{ ... }} }}
-            """
+        {self.base_prompt}
+
+        AVAILABLE TOOLS:
+        {tools_info}
+
+        INSTRUCTIONS:
+        1. Analyze the user's request.
+        2. If the user's intent matches a tool, check if you have ALL required parameters.
+           - Map synonyms: 'make' -> 'create', 'add' -> 'insert', etc.
+        3. IF YOU HAVE ALL PARAMS: Return strictly JSON:
+           {{ "tool": "tool_name", "arguments": {{ "param1": "value1", ... }} }}
+        4. IF MISSING PARAMS: Ask the user specifically for the missing information (do not return JSON yet).
+        5. IF NO TOOL MATCHES: Just chat helpfully.
+        
+        IMPORTANT:
+        - Do not output JSON if you are asking a question.
+        - Only one JSON block per response.
+        """
 
         messages = (
             [SystemMessage(content=system_prompt)] + 
@@ -133,34 +122,52 @@ class PlanningAgent:
         )
 
         response = self.llm.invoke(messages)
-        # response = {content: "fine"}
         content = response.content.strip()
         print(f"\n💬 LLM Response: {content}")
 
         tool_call = self._extract_json(content)
-        print(f"\n🤖 Agent Response: {tool_call}")
-        # STEP 4: EXECUTION
-        if tool_call and "arguments" in tool_call:
-            print(f"🚀 Executing tool {tool_obj.name}")
-            try:
-                func = tool_obj.function
-                if inspect.isasyncgenfunction(func):
-                    results_list = []
-                    async for item in func(**tool_call["arguments"]):
-                        results_list.append(str(item))
-                    result = "\n".join(results_list)
-                elif inspect.iscoroutinefunction(func):
-                    result = await func(**tool_call["arguments"])
-                else:
-                    result = func(**tool_call["arguments"])
-            except Exception as e:
-                result = f"❌ Tool error: {e}"
+        
+        # If valid JSON tool call found, execute it
+        if tool_call and "tool" in tool_call and "arguments" in tool_call:
+            tool_name = tool_call["tool"]
+            if tool_name in self.tools:
+                print(f"🚀 Executing tool {tool_name}")
+                tool_obj = self.tools[tool_name]
+                
+                # Yield the tool selection thought/confirmation first if there is any pre-text? 
+                # Usually LLM might say "Sure, executing..." then JSON. 
+                # extract_json handles the block. formatting might strip the pre-text.
+                # Let's yield what the LLM said first if it's not just JSON? 
+                # For now, let's just run the tool.
 
-            self.history = []
-            self.active_tool_name = None
-            return result
+                result = ""
+                try:
+                    func = tool_obj.function
+                    if inspect.isasyncgenfunction(func):
+                        async for item in func(**tool_call["arguments"]):
+                            print(item) 
+                            yield str(item)
+                            result += str(item) + "\n"
+                    elif inspect.iscoroutinefunction(func):
+                        res = await func(**tool_call["arguments"])
+                        yield str(res)
+                        result = str(res)
+                    else:
+                        res = func(**tool_call["arguments"])
+                        yield str(res)
+                        result = str(res)
+                except Exception as e:
+                    result = f"❌ Tool error: {e}"
+                    yield result
+                
+                # Append full turn to history
+                self.history.append(HumanMessage(content=user_input))
+                self.history.append(AIMessage(content=str(result)))
+                return
+            else:
+                 content = f"❌ Error: LLM hallucinated tool '{tool_name}'"
 
-        # STEP 5: CONTINUE
+        # If no tool call or just chat/question
         self.history.append(HumanMessage(content=user_input))
         self.history.append(AIMessage(content=content))
-        return content
+        yield content

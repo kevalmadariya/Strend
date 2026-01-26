@@ -15,40 +15,81 @@ def makeTool(router):
     def func(unique_id):
 
         async def get_fundamentals(tickers: List[str]):
-
+            print(f"🚀 Getting fundamentals for: {tickers}")
             conn = get_db_connection()
             cur = conn.cursor()
-
-            #for each stock check latest stock_id
-            #for each latest stock_id and if date is within one month and fundametal_analysis exists skip
+            
+            final_results = {}
             tickers_to_fetch = []
+            
             for ticker in tickers:
-                cur.execute(
-                    """
-                    SELECT s.stock_id, fa.date
+                # Check for recent data
+                cur.execute("""
+                    SELECT 
+                        fa.date, 
+                        fa.industry, fa.description, fa.sector, fa.price, 
+                        fa.quickratio, fa.peg, fa.sales_growth, fa.roe, fa.roce, fa.profit_growth, 
+                        fa.cfo_pat_5_yr_avg, fa.debt_equity, fa.interest_cover_ratio,
+                        fa.market_cap, fa.enterprise_value, fa.no_of_shares, fa.p_e, fa.p_b, 
+                        fa.div_yield, fa.book_value_ttm, fa.cash, fa.debt, fa.promoter_holding, fa.eps_ttm 
                     FROM stock s
-                    LEFT JOIN fundamental_analysis fa ON s.stock_id = fa.stock_id
+                    JOIN fundamental_analysis fa ON s.stock_id = fa.stock_id
                     WHERE s.ticker = %s
                     ORDER BY fa.date DESC
                     LIMIT 1
-                    """,
-                    (ticker,)
-                )
+                """, (ticker,))
+                
                 row = cur.fetchone()
+                
+                is_cached = False
                 if row:
-                    stock_id, last_fa_date = row
+                    last_fa_date = row[0]
                     if last_fa_date:
                         days_diff = (date.today() - last_fa_date).days
                         if days_diff <= 30:
-                            print(f"ℹ️ Skipping {ticker}, recent fundamentals exist.")
-                            continue
-                tickers_to_fetch.append(ticker)
+                            # Reconstruct the ratios dict (matching fetch_and_store_fundamentals structure)
+                            ratios = {
+                                "Industry": row[1],
+                                "Description": row[2],
+                                "Sector": row[3],
+                                "Price": float(row[4]) if row[4] is not None else 0.0,
+                                "QuickRatio": float(row[5]) if row[5] is not None else None,
+                                "PEG": float(row[6]) if row[6] is not None else None,
+                                "Sales Growth": float(row[7]) if row[7] is not None else 0.0,
+                                "ROE": float(row[8]) if row[8] is not None else 0.0,
+                                "ROCE": float(row[9]) if row[9] is not None else 0.0,
+                                "Profit Growth": float(row[10]) if row[10] is not None else 0.0,
+                                "CFO/PAT (5 Yr. Avg.)": float(row[11]) if row[11] is not None else 0.0,
+                                "Debt/Equity": float(row[12]) if row[12] is not None else 0.0,
+                                "Interest Cover Ratio": float(row[13]) if row[13] is not None else 0.0,
+                                "Market Cap": float(row[14]) if row[14] is not None else 0.0,
+                                "Enterprise Value": float(row[15]) if row[15] is not None else 0.0,
+                                "No. of Shares": float(row[16]) if row[16] is not None else 0.0,
+                                "P/E": float(row[17]) if row[17] is not None else 0.0,
+                                "P/B": float(row[18]) if row[18] is not None else 0.0,
+                                "Div. Yield": float(row[19]) if row[19] is not None else 0.0,
+                                "Book Value (TTM)": float(row[20]) if row[20] is not None else 0.0,
+                                "CASH": float(row[21]) if row[21] is not None else 0.0,
+                                "DEBT": float(row[22]) if row[22] is not None else 0.0,
+                                "Promoter Holding": float(row[23]) if row[23] is not None else 0.0,
+                                "EPS (TTM)": float(row[24]) if row[24] is not None else 0.0
+                            }
+                            final_results[ticker] = ratios
+                            yield f"   ✅ Found cached fundamentals for {ticker} (Last updated: {last_fa_date})\n"
+                            is_cached = True
+            
+                if not is_cached:
+                    tickers_to_fetch.append(ticker)
+            
+            conn.close()
 
-
-            return await fetch_and_store_fundamentals(
-                tickers=tickers_to_fetch,
-                unique_id=unique_id
-            )
+            if tickers_to_fetch:
+                yield f"   🔄 Fetching fresh fundamentals for: {', '.join(tickers_to_fetch)}\n"
+                fresh_data = await fetch_and_store_fundamentals(tickers_to_fetch, unique_id)
+                if fresh_data and "data" in fresh_data:
+                    final_results.update(fresh_data["data"])
+            
+            yield json.dumps({"status": "success", "data": final_results})
 
         return DynamicTool(
             name="get_fundamentals",
