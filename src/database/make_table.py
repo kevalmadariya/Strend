@@ -41,11 +41,12 @@ create_tables_sql = [
     );
     """,
     """
-    CREATE TABLE IF NOT EXISTS conversation_messages (
-        conversation_id INT REFERENCES conversation(conversation_id),
-        date DATE default CURRENT_DATE, 
-        history TEXT,
-        unique (conversation_id, date)
+    CREATE TABLE IF NOT EXISTS conversation_message (
+        message_id SERIAL PRIMARY KEY,
+        conversation_id INT NOT NULL REFERENCES conversation(conversation_id) ON DELETE CASCADE,
+        sender_type VARCHAR(10) CHECK (sender_type IN ('user', 'agent')),
+        content TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
     );
     """,
     
@@ -246,6 +247,16 @@ create_tables_sql = [
         unique (method, ticker, date)
     );
     """,
+    """
+    CREATE TABLE IF NOT EXISTS learnings (
+                    learning_id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL,
+                    date DATE NOT NULL,
+                    learning TEXT NOT NULL,
+                    exceptions TEXT,
+                    sentiment INTEGER,
+                    event TEXT
+    );"""
 ]
 
 # Execute all table creation statements

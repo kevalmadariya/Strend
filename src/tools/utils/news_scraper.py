@@ -8,57 +8,85 @@ async def scrape_news_from_groww(ticker: str):
     Returns a list of dictionaries with keys: 'time_str', 'news', 'url'.
     """
     print(f"🕵️ [Scraper] Starting news extraction for: {ticker}")
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        context = await browser.new_context()
-        page = await context.new_page()
+    news_data = []
+    
+    try:
+        async with async_playwright() as p:
+            # Launch browser with slightly longer timeout args if needed
+            browser = await p.chromium.launch(headless=True)
+            context = await browser.new_context(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36")
+            page = await context.new_page()
 
-        news_data = []
-
-        try:
-            print(f"🌍 [Scraper] Navigating to Groww...")
-            # 1. Open Groww
-            await page.goto("https://groww.in/", timeout=60000)
-
-            # 2. Activate Search
-            search_input = page.locator("input#globalSearch23")
-            if not await search_input.is_visible():
-                placeholder = page.locator(".se27SeSearchMainDivPlaceholder")
-                if await placeholder.count() > 0:
-                    await placeholder.click(force=True)
-                else:
-                    await page.keyboard.press("Control+K")
-
-            # 3. Type Ticker
-            print(f"⌨️ [Scraper] Searching for ticker: {ticker}")
-            await search_input.wait_for(state="visible", timeout=5000)
-            await search_input.fill("")
-            await search_input.type(ticker, delay=100)
-
-            # 4. Click Suggestion
-            print(f"point [Scraper] Waiting for suggestions...")
-            suggestion = page.locator(".se27SeSuggestion").first
-            await suggestion.wait_for(state="visible", timeout=5000)
-            await suggestion.click()
-
-            # 5. Wait for Navigation
-            print(f"⏳ [Scraper] Waiting for stock page...")
-            await page.wait_for_url("**/stocks/**", timeout=15000)
-
-            # 6. Go to Market News
-            current_url = page.url
-            if current_url.endswith("/"):
-                current_url = current_url[:-1]
-            
-            news_url = f"{current_url}/market-news"
-            print(f"🔗 [Scraper] Navigating to News Section: {news_url}")
-            await page.goto(news_url, timeout=30000)
-
-            # 7. Extract News
-            news_container = ".stockNews_newsRow__BC7Ia"
-            print(f"👀 [Scraper] Looking for news items...")
             try:
-                await page.wait_for_selector(news_container, timeout=10000)
+                print(f"🌍 [Scraper] Navigating to Groww...")
+                # 1. Open Groww
+                await page.goto("https://groww.in/", timeout=40000)
+
+                # 2. Activate Search
+                # Try multiple potential selectors for the search bar
+                search_selectors = ["input#globalSearch23", "div.se27SeSearchMainDivPlaceholder", "input[type='text']"]
+                search_input = None
+                
+                for sel in search_selectors:
+                     if await page.locator(sel).count() > 0 and await page.locator(sel).is_visible():
+                         # If it's the placeholder div, click it to reveal input, then find input
+                         if "Placeholder" in sel:
+                             await page.locator(sel).click()
+                             search_input = page.locator("input#globalSearch23")
+                         else:
+                             search_input = page.locator(sel)
+                         break
+                
+                if not search_input:
+                     # Last ditch: keyboard shortcut
+                     await page.keyboard.press("Control+K")
+                     search_input = page.locator("input#globalSearch23")
+
+                # 3. Type Ticker
+                print(f"⌨️ [Scraper] Searching for ticker: {ticker}")
+                await search_input.wait_for(state="visible", timeout=10000)
+                await search_input.fill("")
+                await search_input.type(ticker, delay=150) # Type slower
+
+                # 4. Click Suggestion
+                print(f"point [Scraper] Waiting for suggestions...")
+                # Wait for the suggestion box to appear
+                await page.wait_for_selector(".se27SeSuggestion, .se27SeResultList", timeout=10000)
+                
+                # Use first suggestion
+                suggestions = page.locator(".se27SeSuggestion")
+                if await suggestions.count() > 0:
+                    await suggestions.first.click()
+                else:
+                    print("⚠️ No suggestions found.")
+                    await browser.close()
+                    return []
+
+                # 5. Wait for Navigation
+                print(f"⏳ [Scraper] Waiting for stock page...")
+                await page.wait_for_url("**/stocks/**", timeout=20000)
+
+                # 6. Go to Market News
+                current_url = page.url
+                if current_url.endswith("/"):
+                    current_url = current_url[:-1]
+                
+                news_url = f"{current_url}/market-news"
+                print(f"🔗 [Scraper] Navigating to News Section: {news_url}")
+                await page.goto(news_url, timeout=30000)
+
+                # 7. Extract News
+                news_container = ".stockNews_newsRow__BC7Ia"
+                print(f"👀 [Scraper] Looking for news items...")
+                
+                try:
+                    await page.wait_for_selector(news_container, timeout=10000)
+                except Exception:
+                     # It's possible there are no news items, or selector changed.
+                     print(f"⚠️ News container not found (timeout). Possibly no news.")
+                     await browser.close()
+                     return []
+
                 news_items = page.locator(news_container)
                 count = await news_items.count()
                 limit = min(count, 5) # Fetch up to 5 items
@@ -79,7 +107,7 @@ async def scrape_news_from_groww(ticker: str):
                     news_link = await link_el.get_attribute("href") if await link_el.count() > 0 else ""
                     
                     if news_link and news_link.startswith("/"):
-                         news_link = "https://groww.in" + news_link
+                            news_link = "https://groww.in" + news_link
 
                     print(f"  > Found: {time_text} - {news_text[:30]}...")
                     news_data.append({
@@ -87,12 +115,14 @@ async def scrape_news_from_groww(ticker: str):
                         "news": news_text.replace("\n", " ").strip(),
                         "url": news_link
                     })
-            except Exception as e:
-                print(f"⚠️ [Scraper] Error parsing news items: {e}")
-                
-        except Exception as e:
-            print(f"❌ [Scraper] Error during scraping flow: {e}")
+            
+            except Exception as e_inner:
+                print(f"❌ [Scraper] Inner Error: {e_inner}")
+            
+            await browser.close()
+            
+    except Exception as e_outer:
+         print(f"❌ [Scraper] Critical Error or Browser Launch Failed: {e_outer}")
 
-        await browser.close()
-        print(f"✅ [Scraper] Finished. Tokens found: {len(news_data)}")
-        return news_data
+    print(f"✅ [Scraper] Finished. Tokens found: {len(news_data)}")
+    return news_data

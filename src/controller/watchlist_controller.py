@@ -245,10 +245,10 @@ def get_watchlist_stocks_live(watchlist_id: int):
         
         cur = conn.cursor()
         
-        # 1. Get stock_id, ticker, and price_when_added associated with this watchlist
+        # 1. Get stock_id, ticker, price_when_added, and date associated with this watchlist
         cur.execute(
             """
-            SELECT s.stock_id, s.ticker, ws.price_of_stock_when_added
+            SELECT s.stock_id, s.ticker, ws.price_of_stock_when_added, ws.date
             FROM watchlist_stocks ws
             JOIN stock s ON ws.stock_id = s.stock_id
             WHERE ws.watchlist_id = %s
@@ -267,6 +267,7 @@ def get_watchlist_stocks_live(watchlist_id: int):
             stock_id = row[0]
             ticker = row[1]
             price_added = row[2]
+            date_added = row[3]
             
             try:
                 # print(f"Fetching live data for {ticker}...")
@@ -281,7 +282,8 @@ def get_watchlist_stocks_live(watchlist_id: int):
                         "name": data.get("name"),
                         "price": data.get("price"),
                         "percent_change": data.get("percent_change"),
-                        "price_of_stock_when_added": price_added
+                        "price_of_stock_when_added": price_added,
+                        "date": date_added
                     })
                 else:
                     print(f"Failed to fetch live data for {ticker}. Skipping.")

@@ -17,7 +17,7 @@ async def websocket_endpoint(
     user_id: int,
     agent_name: str,
     module: str,
-    conversation_id: int
+    conversation_id: str
 ):
     print("Client connected")
     # ------------------------------------------------------------------

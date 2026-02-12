@@ -14,6 +14,8 @@ from .watchlist_tool import makeTool as watchlist_tool
 from .watchlist_stocks_tool import makeTool as watchlist_stocks_tool
 from .news_analysis_tool import makeTool as news_analysis_tool
 from .recent_news_tool import makeTool as recent_news_tool
+from .best_predictions_tool import makeTool as best_predictions_tool
+from .compare_nifty_tool import makeTool as compare_nifty_tool
 router = APIRouter(prefix='/planning-tools')
 
 # The loader expects this exact structure:
@@ -30,4 +32,6 @@ __all__: List[Callable[[str], DynamicTool]] = [
     watchlist_stocks_tool(router=router),
     news_analysis_tool(router=router),
     recent_news_tool(router=router),
+    best_predictions_tool(router=router),
+    compare_nifty_tool(router=router),
 ]

@@ -83,28 +83,64 @@ def get_yfinance_data(ticker_symbol):
                 );
             """)
 
-            cur.execute("""
-                INSERT INTO stock (
-                    name, ticker, price, volume, percent_change,
-                    close, high, open, low, date
-                )
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                ON CONFLICT (ticker, date) DO NOTHING
-            """, (
-                stock_data["name"],
-                stock_data["ticker"],
-                stock_data["price"],
-                stock_data["volume"],
-                stock_data["percent_change"],
-                stock_data["close"],
-                stock_data["high"],
-                stock_data["open"],
-                stock_data["low"],
-                date.today()
-            ))
+            # Check if ticker already exists to update instead of insert
+            cur.execute("SELECT stock_id FROM stock WHERE ticker = %s ORDER BY date DESC LIMIT 1", (stock_data["ticker"],))
+            existing_stock = cur.fetchone()
 
-            conn.commit()
-            print(f"💾 Data for {stock_data['ticker']} saved to DB.")
+            if existing_stock:
+                cur.execute("""
+                    UPDATE stock SET
+                        name = %s,
+                        price = %s,
+                        volume = %s,
+                        percent_change = %s,
+                        close = %s,
+                        high = %s,
+                        open = %s,
+                        low = %s,
+                        date = %s
+                    WHERE stock_id = %s
+                """, (
+                    stock_data["name"],
+                    stock_data["price"],
+                    stock_data["volume"],
+                    stock_data["percent_change"],
+                    stock_data["close"],
+                    stock_data["high"],
+                    stock_data["open"],
+                    stock_data["low"],
+                    date.today(),
+                    existing_stock[0]
+                ))
+
+                # Clean up any other duplicates for this ticker to prevent table growth
+                cur.execute("DELETE FROM stock WHERE ticker = %s AND stock_id != %s", (stock_data["ticker"], existing_stock[0]))
+                
+                conn.commit()
+                print(f"🔄 Data for {stock_data['ticker']} updated in DB.")
+
+            else:
+                cur.execute("""
+                    INSERT INTO stock (
+                        name, ticker, price, volume, percent_change,
+                        close, high, open, low, date
+                    )
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                """, (
+                    stock_data["name"],
+                    stock_data["ticker"],
+                    stock_data["price"],
+                    stock_data["volume"],
+                    stock_data["percent_change"],
+                    stock_data["close"],
+                    stock_data["high"],
+                    stock_data["open"],
+                    stock_data["low"],
+                    date.today()
+                ))
+                
+                conn.commit()
+                print(f"💾 Data for {stock_data['ticker']} saved to DB.")
 
         except Exception as db_err:
             if conn:

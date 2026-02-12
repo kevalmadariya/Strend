@@ -10,6 +10,8 @@ from src.controller.auth_controller import router as auth_router
 from src.controller.watchlist_controller import router as watchlist_router
 from src.controller.stock_controller import router as stock_router
 from src.controller.news_controller import router as news_router
+from src.controller.conversation_controller import router as conversation_router
+from src.controller.learning_controller import router as learning_router
 from src.core.manager import ConnectionManager
 import asyncio
 import sys
@@ -18,7 +20,9 @@ import sys
 if sys.platform == 'win32':
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
-app = FastAPI()
+from src.core.multi_processor import lifespan
+
+app = FastAPI(lifespan=lifespan)
 
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -85,6 +89,8 @@ app.include_router(auth_router)
 app.include_router(watchlist_router)
 app.include_router(stock_router)
 app.include_router(news_router)
+app.include_router(conversation_router)
+app.include_router(learning_router)
 
 if __name__ == "__main__":
     import uvicorn

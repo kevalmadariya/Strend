@@ -30,8 +30,10 @@ async def fetch_and_store_fundamentals(
 
                 # 1️⃣ Scrape data
                 try:
-                    ratios, charts, holdings_raw, analysis = WebScaping(
-                        ticker, {}, {}, {}, {}
+                    # Offload the blocking WebScaping call to a thread
+                    import asyncio
+                    ratios, charts, holdings_raw, analysis = await asyncio.to_thread(
+                        WebScaping, ticker, {}, {}, {}, {}
                     )
                     if not ratios:
                         print(f"❌ Empty scrape for {ticker}")
