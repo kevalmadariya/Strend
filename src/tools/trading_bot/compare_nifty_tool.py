@@ -6,7 +6,23 @@ from ..base import DynamicTool, ToolParam
 
 def makeTool(router):
     def func(unique_id):
-        async def compare_nifty(tickers: List[str], durations: Optional[List[str]] = None):
+        async def compare_nifty(tickers: Optional[List[str]] = None, durations: Optional[List[str]] = None, text: Optional[str] = None):
+            import re
+            
+            all_tickers = set(tickers) if tickers else set()
+            
+            # Extract tickers from text if provided
+            if text:
+                # Regex to find potential tickers: UPPERCASE words with length >= 3
+                found_in_text = re.findall(r'\b[A-Z0-9]{3,}\b', text)
+                for t in found_in_text:
+                    if t not in ["AND", "FOR", "THE", "WITH", "ARE", "NOT", "YES", "CAN", "YOU", "BUT"]:
+                        all_tickers.add(t)
+
+            if not all_tickers:
+                 yield "⚠️ No tickers provided. Please specify tickers in the list or mention them in the text.\n"
+                 return
+
             if not durations:
                 durations = ['1mo', '3mo', '6mo', '9mo', '12mo']
             
@@ -15,7 +31,7 @@ def makeTool(router):
             
             combined_results = {}
 
-            for ticker in tickers:
+            for ticker in all_tickers:
                 # Normalize ticker if needed (default to .NS for Indian stocks if no suffix)
                 # But we respect user input first. If it fails, maybe retry with .NS?
                 # The prompt implies Indian context (Nifty), so likely Indian stocks.
@@ -123,7 +139,8 @@ def makeTool(router):
             triggers=["compare nifty", "stock vs nifty", "correlation with nifty"],
             function=compare_nifty,
             parameters=[
-                ToolParam(name="tickers", type="array", required=True, description="List of stock tickers (e.g. RELIANCE, TCS)"),
+                ToolParam(name="tickers", type="array", required=False, description="List of stock tickers (e.g. RELIANCE, TCS)"),
+                ToolParam(name="text", type="string", required=False, description="Text containing stock tickers (e.g. 'Compare RELIANCE and TCS')"),
                 ToolParam(name="durations", type="array", required=False, description="List of durations (e.g. 1mo, 3mo). Default: 1mo, 3mo, 6mo, 9mo, 12mo")
             ],
             endpoint="/compare-nifty",

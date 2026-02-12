@@ -90,7 +90,6 @@ def get_yfinance_data(ticker_symbol):
             if existing_stock:
                 cur.execute("""
                     UPDATE stock SET
-                        name = %s,
                         price = %s,
                         volume = %s,
                         percent_change = %s,
@@ -101,7 +100,6 @@ def get_yfinance_data(ticker_symbol):
                         date = %s
                     WHERE stock_id = %s
                 """, (
-                    stock_data["name"],
                     stock_data["price"],
                     stock_data["volume"],
                     stock_data["percent_change"],
@@ -114,7 +112,7 @@ def get_yfinance_data(ticker_symbol):
                 ))
 
                 # Clean up any other duplicates for this ticker to prevent table growth
-                cur.execute("DELETE FROM stock WHERE ticker = %s AND stock_id != %s", (stock_data["ticker"], existing_stock[0]))
+                # cur.execute("DELETE FROM stock WHERE ticker = %s AND stock_id != %s", (stock_data["ticker"], existing_stock[0]))
                 
                 conn.commit()
                 print(f"🔄 Data for {stock_data['ticker']} updated in DB.")

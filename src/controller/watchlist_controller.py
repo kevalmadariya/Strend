@@ -211,13 +211,31 @@ def add_stock_to_watchlist(data: AddStockToWatchlistRequest):
                 (data.watchlist_id, stock_id, price, date.today())
             )
             inserted = cur.fetchone()
+            
+            # Fetch details for return
+            cur.execute("SELECT name, ticker, percent_change FROM stock WHERE stock_id = %s", (stock_id,))
+            stock_info = cur.fetchone()
+            
+            live_data_results = []
+            if stock_info:
+                live_data_results.append({
+                    "stock_id": inserted[1],
+                    "ticker": stock_info[1],
+                    "name": stock_info[0],
+                    "price": inserted[2],
+                    "percent_change": stock_info[2],
+                    "price_of_stock_when_added": inserted[2],
+                    "date": date.today()
+                })
+
             conn.commit()
             
             return {
                 "message": "Stock added successfully",
                 "watchlist_id": inserted[0],
                 "stock_id": inserted[1],
-                "price_of_stock_when_added": inserted[2]
+                "price_of_stock_when_added": inserted[2],
+                "live_data_results": live_data_results
             }
              
         except psycopg2.errors.UniqueViolation:
