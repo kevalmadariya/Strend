@@ -5,6 +5,7 @@ from ..base import DynamicTool
 from ..base import ToolParam
 from src.tools.utils.news_scraper import scrape_news_from_groww
 import re
+from typing import Optional
 
 def makeTool(router):
     """
@@ -64,20 +65,37 @@ def makeTool(router):
             """, (ticker, date.today(), ticker))
             return cur.fetchone()[0]
 
-        async def analyze_news(tickers: list[str]):
+        async def analyze_news(tickers: Optional[list[str]] = None, text: Optional[str] = None):
             """
             Checks DB for news for multiple tickers. Yields updates and results.
             """
             yield f"Test: {unique_id}"
             
+            all_tickers = set()
+
             # Ensure tickers is a list (handling single string case if LLM messes up)
-            if isinstance(tickers, str):
-                if "," in tickers:
-                    tickers = [t.strip() for t in tickers.split(',')]
+            if tickers:
+                if isinstance(tickers, str):
+                    if "," in tickers:
+                        ts = [t.strip() for t in tickers.split(',')]
+                        all_tickers.update(ts)
+                    else:
+                        all_tickers.add(tickers)
                 else:
-                    tickers = [tickers]
+                    all_tickers.update(tickers)
             
-            yield f"🗞️ [ID: {unique_id}] Processing news for {len(tickers)} tickers: {tickers}"
+            # Extract tickers from text if provided
+            if text:
+                found_in_text = re.findall(r'\b[A-Z0-9]{3,}\b', text)
+                for t in found_in_text:
+                     if t not in ["AND", "FOR", "THE", "WITH", "ARE", "NOT", "YES", "CAN", "YOU", "BUT"]:
+                        all_tickers.add(t)
+
+            if not all_tickers:
+                 yield "⚠️ No tickers provided. Please specify tickers in the list or mention them in the text."
+                 return
+
+            yield f"🗞️ [ID: {unique_id}] Processing news for {len(all_tickers)} tickers: {all_tickers}"
             
             conn = None
             try:
@@ -85,7 +103,7 @@ def makeTool(router):
                 conn = get_db_connection()
                 cur = conn.cursor()
 
-                for ticker in tickers:
+                for ticker in all_tickers:
                     clean_ticker = ticker.upper().strip()
                     if "." in clean_ticker:
                         clean_ticker = clean_ticker.split(".")[0]
@@ -173,9 +191,10 @@ def makeTool(router):
                     name="tickers",
                     type="array",
                     description="List of Stock Tickers (e.g. ['RELIANCE', 'TCS'])",
-                    required=True,
+                    required=False,
                     items={"type": "string"}
-                )
+                ),
+                ToolParam(name="text", type="string", description="Text containing stock tickers", required=False)
             ],
             endpoint="/news-analysis",
             router=router

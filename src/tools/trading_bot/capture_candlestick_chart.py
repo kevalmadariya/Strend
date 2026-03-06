@@ -14,7 +14,22 @@ def makeTool(router):
     
     def func(unique_id):
                 
-        async def capture_candlestick_chart(tickers: List[str]):
+        async def capture_candlestick_chart(tickers: Optional[List[str]] = None, text: Optional[str] = None):
+            
+            import re
+            
+            all_tickers = set(tickers) if tickers else set()
+            
+            # Extract tickers from text if provided
+            if text:
+                found_in_text = re.findall(r'\b[A-Z0-9]{3,}\b', text)
+                for t in found_in_text:
+                    if t not in ["AND", "FOR", "THE", "WITH", "ARE", "NOT", "YES", "CAN", "YOU", "BUT"]:
+                        all_tickers.add(t)
+
+            if not all_tickers:
+                 yield log("⚠️ No tickers provided. Please specify tickers in the list or mention them in the text.\n")
+                 return
 
             def log(msg: str):
                 print(msg, flush=True)
@@ -46,11 +61,11 @@ def makeTool(router):
                 yield log(f"❌ Database Error (Table Creation): {e}\n")
                 return
 
-            yield log(f"🚀 Started Chart Capture for {len(tickers)} tickers\n")
+            yield log(f"🚀 Started Chart Capture for {len(all_tickers)} tickers\n")
 
             results_summary = []
 
-            for ticker in tickers:
+            for ticker in all_tickers:
                 try:
                     yield log(f"🔄 Processing {ticker}...\n")
 
@@ -108,7 +123,8 @@ def makeTool(router):
             triggers=["Capture chart", "Get candlestick chart", "Screenshot stock"],
             function=capture_candlestick_chart,
             parameters=[
-                ToolParam(name="tickers", type="list", required=True, description="List of stock tickers")
+                ToolParam(name="tickers", type="list", required=False, description="List of stock tickers"),
+                ToolParam(name="text", type="string", required=False, description="Text containing stock tickers")
             ],
             endpoint="/capture-chart",
             router=router

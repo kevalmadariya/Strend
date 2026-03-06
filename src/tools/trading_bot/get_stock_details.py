@@ -5,6 +5,7 @@ import psycopg2
 from ..base import DynamicTool
 from ..base import ToolParam
 from datetime import date
+from typing import Optional
 
 def makeTool(router):
     """
@@ -12,20 +13,37 @@ def makeTool(router):
     """
     def func(unique_id):
         
-        async def scrape_stock_data(ticker: str):
+        async def scrape_stock_data(ticker: Optional[str] = None, text: Optional[str] = None):
             """
             Fetches live stock data using Yahoo Finance API and stores it in the DB.
-            Supports multiple tickers separated by commas.
+            Supports multiple tickers separated by commas or extracted from text.
             """
-            print(f"✅ [ID: {unique_id}] Fetching yfinance data for: {ticker}")
+            import re
             
-            # Handle comma-separated list
-            tickers = [t.strip() for t in ticker.split(",") if t.strip()]
+            all_tickers = set()
+            
+            # Handle comma-separated list in 'ticker' param
+            if ticker:
+                for t in ticker.split(","):
+                    if t.strip():
+                        all_tickers.add(t.strip())
+            
+            # Extract tickers from text if provided
+            if text:
+                found_in_text = re.findall(r'\b[A-Z0-9]{3,}\b', text)
+                for t in found_in_text:
+                    if t not in ["AND", "FOR", "THE", "WITH", "ARE", "NOT", "YES", "CAN", "YOU", "BUT"]:
+                        all_tickers.add(t)
+
+            if not all_tickers:
+                 return "⚠️ No valid tickers provided. Please specify tickers or mention them in the text."
+
+            print(f"✅ [ID: {unique_id}] Fetching yfinance data for: {all_tickers}")
             
             results = []
             errors = []
             
-            for t in tickers:
+            for t in all_tickers:
                 clean_ticker = t.upper()
                 if not clean_ticker.endswith(".NS") and not clean_ticker.endswith(".BO"):
                     clean_ticker += ".NS"
@@ -70,7 +88,8 @@ def makeTool(router):
             triggers=["Get stock details", "Fetch stock data"],
             function=scrape_stock_data,
             parameters=[
-                ToolParam(name="ticker", type="string", description="Stock Ticker", required=True)
+                ToolParam(name="ticker", type="string", description="Stock Ticker (comma separated)", required=False),
+                ToolParam(name="text", type="string", description="Text containing stock tickers", required=False)
             ],
             endpoint="/check-stock",
             router=router

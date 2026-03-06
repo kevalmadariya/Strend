@@ -1,5 +1,5 @@
 import json
-from typing import List
+from typing import List, Optional
 from src.core.db import get_db_connection
 from datetime import date
 
@@ -14,15 +14,31 @@ def makeTool(router):
 
     def func(unique_id):
 
-        async def get_fundamentals(tickers: List[str]):
-            print(f"🚀 Getting fundamentals for: {tickers}")
+        async def get_fundamentals(tickers: Optional[List[str]] = None, text: Optional[str] = None):
+            import re
+
+            all_tickers = set(tickers) if tickers else set()
+            
+            # Extract tickers from text if provided
+            if text:
+                # Regex to find potential tickers: UPPERCASE words with length >= 3
+                found_in_text = re.findall(r'\b[A-Z0-9]{3,}\b', text)
+                for t in found_in_text:
+                    if t not in ["AND", "FOR", "THE", "WITH", "ARE", "NOT", "YES", "CAN", "YOU", "BUT"]:
+                        all_tickers.add(t)
+
+            if not all_tickers:
+                 yield "⚠️ No tickers provided. Please specify tickers in the list or mention them in the text.\n"
+                 return
+
+            print(f"🚀 Getting fundamentals for: {all_tickers}")
             conn = get_db_connection()
             cur = conn.cursor()
             
             final_results = {}
             tickers_to_fetch = []
             
-            for ticker in tickers:
+            for ticker in all_tickers:
                 # Check for recent data
                 cur.execute("""
                     SELECT 
@@ -97,7 +113,8 @@ def makeTool(router):
             triggers=["Get fundamental analysis", "Fetch stock fundamentals"],
             function=get_fundamentals,
             parameters=[
-                ToolParam(name="tickers", type="list", required=True, description="List of stock tickers")
+                ToolParam(name="tickers", type="list", required=False, description="List of stock tickers"),
+                ToolParam(name="text", type="string", required=False, description="Text containing stock tickers (e.g. 'Fundamentals of RELIANCE')")
             ],
             endpoint="/get-fundamentals",
             router=router

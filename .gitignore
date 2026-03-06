@@ -9,3 +9,12 @@ wheels/
 # Virtual environments
 .venv
 .env
+
+# Playit data
+playit_data/*
+
+# Temporary files
+temp/*
+
+temp
+playit_data

@@ -11,11 +11,26 @@ def makeTool(router):
     
     def func(unique_id):
         
-        async def get_technical_analysis(tickers: List[str], type: str = "both"):
+        async def get_technical_analysis(tickers: Optional[List[str]] = None, type: str = "both", text: Optional[str] = None):
             """
             Calculates trend and chart patterns for given tickers and stores them in the database.
             Using yield for streaming response.
             """
+            import re
+            
+            all_tickers = set(tickers) if tickers else set()
+            
+            # Extract tickers from text if provided
+            if text:
+                # Regex to find potential tickers: UPPERCASE words with length >= 3
+                found_in_text = re.findall(r'\b[A-Z0-9]{3,}\b', text)
+                for t in found_in_text:
+                    if t not in ["AND", "FOR", "THE", "WITH", "ARE", "NOT", "YES", "CAN", "YOU", "BUT"]:
+                        all_tickers.add(t)
+
+            if not all_tickers:
+                 yield "⚠️ No tickers provided. Please specify tickers in the list or mention them in the text.\n"
+                 return
             
             conn = get_db_connection()
             cur = conn.cursor()
@@ -43,14 +58,14 @@ def makeTool(router):
                 yield f"❌ Database Error (Table Creation): {e}\n"
                 return
 
-            yield f"🚀 Started Technical Analysis for {len(tickers)} tickers (Type: {type})\n"
+            yield f"🚀 Started Technical Analysis for {len(all_tickers)} tickers (Type: {type})\n"
 
             results_summary = []
             
             end_date = date.today()
             start_date = end_date - relativedelta(months=6)
 
-            for ticker in tickers:
+            for ticker in all_tickers:
                 try:
                     yield f"🔄 Processing {ticker}...\n"
                     
@@ -176,7 +191,8 @@ def makeTool(router):
             triggers=["Get trend and patterns", "Analyze chart patterns","Get RSI MACD ADX", "Calculate indicators"],
             function=get_technical_analysis,
             parameters=[
-                ToolParam(name="tickers", type="list", required=True, description="List of stock tickers (e.g. ['RELIANCE', 'TCS'])"),
+                ToolParam(name="tickers", type="list", required=False, description="List of stock tickers (e.g. ['RELIANCE', 'TCS'])"),
+                ToolParam(name="text", type="string", required=False, description="Text containing stock tickers (e.g. 'Analyze RELIANCE')"),
                 ToolParam(name="type", type="string", required=False, description="Analysis type: 'trend', 'chart_patterns', or 'both' (default 'both')")
             ],
             endpoint="/get-technical-analysis",
