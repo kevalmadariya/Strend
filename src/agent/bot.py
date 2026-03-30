@@ -1,202 +1,173 @@
-import time
 import json
 import re
-from typing import List, Dict, Optional, Any
-
 import inspect
-from sentence_transformers import SentenceTransformer, util
-from langchain_groq import ChatGroq
-from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+from typing import Optional, Dict
 from dotenv import load_dotenv
 
-# Import the registry logic
+from langchain_groq import ChatGroq
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+from sentence_transformers import SentenceTransformer
+
 from src.agent.agents import get_agent_config
+# from src.core.vector_db import ToolVectorDB  # <-- Commented out
 
 load_dotenv()
 
 class PlanningAgent:
     def __init__(self, agent_name: str, unique_id: str = None):
-        """
-        Dynamic Initialization:
-        1. Looks up the agent factory by name.
-        2. Loads tools and prompts.
-        3. Builds the Semantic Router specifically for those tools.
-        """
-        print(f"⚙️ Initializing PlanningAgent: {agent_name}...")
-        
-        # 1. Load Configuration from Factory
+        print(f"\n⚙️ Initializing PlanningAgent: {agent_name}")
+
         self.config = get_agent_config(agent_name, unique_id)
-        
+
         self.name = self.config.name
         self.base_prompt = self.config.base_prompt
+
+        # --------------------------------------------------
+        # LOAD TOOLS
+        # --------------------------------------------------
         self.tools = {}
+        print("\n🛠️ Loading tools:")
 
-        for tool_factory in self.config.tools:
-            tool = tool_factory(unique_id)   # 🔥 EXECUTE FACTORY
+        for factory in self.config.tools:
+            tool = factory(unique_id)
             self.tools[tool.name] = tool
+            print(f"   ✅ Loaded tool: {tool.name}")
 
-        print(self.name)
-        print(self.base_prompt)
-        print(self.tools)
-        print(type(self.tools))
-        print(self.tools.keys())
-        print(type(next(iter(self.tools.values()))))
+        print(f"📦 Total tools loaded: {len(self.tools)}")
 
-        
-        # 2. Initialize LLM
-        self.llm = ChatGroq(model_name="llama-3.3-70b-versatile", temperature=0)
-        
-        # 3. Initialize State
+        # --------------------------------------------------
+        # VECTOR DB (DISABLED)
+        # --------------------------------------------------
+        # self.vector_db = ToolVectorDB(
+        #     base_path="./vector_db",
+        #     agent_name=self.name
+        # )
+        # self.vector_db.sync_agent_tools(self.tools)
+
+        # --------------------------------------------------
+        # LLM
+        # --------------------------------------------------
+        self.llm = ChatGroq(
+            model_name="llama-3.3-70b-versatile",
+            temperature=0
+        )
+
+        # self.embedder = SentenceTransformer("all-MiniLM-L6-v2")
+
+        # --------------------------------------------------
+        # STATE
+        # --------------------------------------------------
         self.history = []
-        self.active_tool_name = None
+        # self.active_tool_name = None # No longer relying on sticky tool state, LLM decides
 
-        # 4. Build Semantic Router (Dynamic based on loaded tools)
-        self._build_router()
-        print(f"✅ {self.name} Ready with {len(self.tools)} tools.")
+        print(f"\n✅ {self.name} ready")
 
-    def _build_router(self):
-            """Encodes tool triggers for this specific agent instance."""
-            print(f"🔌 Building Router for {len(self.tools)} tools...")
-            
-            self.embedder = SentenceTransformer("all-MiniLM-L6-v2")
-            self.tool_names = []
-            triggers = []
-            print("tool mapping:")
-            print(self.tools)
+    # --------------------------------------------------
+    # HELPER: Get Tools Description
+    # --------------------------------------------------
+    def _get_tools_prompt(self):
+        tools_desc = []
+        for name, tool in self.tools.items():
+            params = ", ".join([f"{p.name} ({'Req' if p.required else 'Opt'})" for p in tool.parameters])
+            tools_desc.append(f"- {name}: {tool.description} | Params: [{params}]")
+        return "\n".join(tools_desc)
 
-            for name, tool in self.tools.items():
-                route_text = getattr(tool, "trigger", None) or tool.description or tool.name
-                
-                if route_text:
-                    self.tool_names.append(name)
-                    triggers.append(route_text)
-                    print(f"   Mapped '{name}' -> Trigger: '{route_text[:50]}...'")
-                else:
-                    print(f"⚠️  Skipping '{name}': No trigger or description found.")
-
-            if triggers:
-                # Convert to tensor immediately to ensure shape is correct
-                self.tool_embeddings = self.embedder.encode(triggers, convert_to_tensor=True)
-                print(f"✅ Router built with {len(triggers)} triggers.")
-            else:
-                self.tool_embeddings = None
-                print("❌ Router setup failed: No valid triggers found.")
-    # def _build_router(self):
-    #     """Encodes tool triggers for this specific agent instance."""
-    #     self.embedder = SentenceTransformer("all-MiniLM-L6-v2")
-        
-    #     # Assuming tools have a .trigger or .description attribute for routing
-    #     self.tool_names = list(self.tools.keys())
-    #     # Fallback to description if trigger not present
-    #     triggers = [getattr(t, "trigger", t.description) for t in self.tools.values()]
-        
-    #     if triggers:
-    #         self.tool_embeddings = self.embedder.encode(triggers, convert_to_tensor=True)
-    #     else:
-    #         self.tool_embeddings = None
-
-    def _semantic_route(self, query: str, threshold: float = 0.40) -> Optional[str]:
-        if self.tool_embeddings is None:
-            return None
-            
-        query_embedding = self.embedder.encode(query, convert_to_tensor=True)
-        hits = util.semantic_search(query_embedding, self.tool_embeddings, top_k=1)
-
-        if hits and hits[0][0]["score"] >= threshold:
-            return self.tool_names[hits[0][0]["corpus_id"]]
-        return None
-
+    # --------------------------------------------------
+    # JSON EXTRACTION
+    # --------------------------------------------------
     def _extract_json(self, text: str) -> Optional[Dict]:
-        """Helper to safely parse JSON from LLM output."""
         text = re.sub(r"```json|```", "", text).strip()
         start = text.find("{")
-        if start == -1: return None
+        if start == -1:
+            return None
         try:
             return json.loads(text[start:text.rfind("}") + 1])
-        except:
+        except Exception as e:
+            print(f"❌ JSON parse error: {e}")
             return None
 
+    # --------------------------------------------------
+    # MAIN LOOP
+    # --------------------------------------------------
     async def run(self, user_input: str):
-            # ------------------------------------------------------------------
-            # STEP 1: ROUTING 
-            # ------------------------------------------------------------------
-            if not self.active_tool_name:
-                detected_tool = self._semantic_route(user_input)
-                if detected_tool:
-                    self.active_tool_name = detected_tool
-                    print(f"🎯 Router Switch: {self.active_tool_name}")
+        print(f"\n👤 User: {user_input}")
 
-            # ------------------------------------------------------------------
-            # STEP 2: GENERAL CHAT 
-            # ------------------------------------------------------------------
-            if not self.active_tool_name:
-                messages = [
-                    SystemMessage(content=self.base_prompt),
-                    HumanMessage(content=user_input)
-                ]
-                # Ensure LLM invocation is handled correctly (invoke is usually sync in LangChain, ainvoke is async)
-                # If using standard LangChain:
-                response = self.llm.invoke(messages) 
-                return response.content
+        # Build dynamic prompt with all tools
+        tools_info = self._get_tools_prompt()
+        
+        system_prompt = f"""
+        {self.base_prompt}
 
-            # ------------------------------------------------------------------
-            # STEP 3: SLOT FILLING 
-            # ------------------------------------------------------------------
-            tool_obj = self.tools[self.active_tool_name]
-            print(f"🛠️  Active Tool: {tool_obj.name}")
+        AVAILABLE TOOLS:
+        {tools_info}
 
-            system_prompt = f"""
-            {self.base_prompt}
-            
-            CURRENT FOCUS: You are using the tool '{tool_obj.name}'.
-            Description: {tool_obj.description}
-            Required Parameters: {tool_obj.parameters}
+        INSTRUCTIONS:
+        1. Analyze the user's request.
+        2. If the user's intent matches a tool, check if you have ALL required parameters.
+           - Map synonyms: 'make' -> 'create', 'add' -> 'insert', etc.
+        3. IF YOU HAVE ALL PARAMS: Return strictly JSON:
+           {{ "tool": "tool_name", "arguments": {{ "param1": "value1", ... }} }}
+        4. IF MISSING PARAMS: Ask the user specifically for the missing information (do not return JSON yet).
+        5. IF NO TOOL MATCHES: Just chat helpfully.
+        
+        IMPORTANT:
+        - Do not output JSON if you are asking a question.
+        - Only one JSON block per response.
+        """
 
-            INSTRUCTIONS:
-            1. Check conversation history for parameters.
-            2. If missing, ask user strictly for missing parameters.
-            3. If ALL present, return JSON:
-            {{ "tool": "{tool_obj.name}", "arguments": {{ ... }} }}
-            """
+        messages = (
+            [SystemMessage(content=system_prompt)] + 
+            self.history + 
+            [HumanMessage(content=user_input)]
+        )
 
-            messages = (
-                [SystemMessage(content=system_prompt)] + 
-                self.history + 
-                [HumanMessage(content=user_input)]
-            )
+        response = self.llm.invoke(messages)
+        content = response.content.strip()
+        print(f"\n💬 LLM Response: {content}")
 
-            response = self.llm.invoke(messages)
-            content = response.content.strip()
+        tool_call = self._extract_json(content)
+        
+        # If valid JSON tool call found, execute it
+        if tool_call and "tool" in tool_call and "arguments" in tool_call:
+            tool_name = tool_call["tool"]
+            if tool_name in self.tools:
+                print(f"🚀 Executing tool {tool_name}")
+                tool_obj = self.tools[tool_name]
+                
+                # Yield the tool selection thought/confirmation first if there is any pre-text? 
+                # Usually LLM might say "Sure, executing..." then JSON. 
+                # extract_json handles the block. formatting might strip the pre-text.
+                # Let's yield what the LLM said first if it's not just JSON? 
+                # For now, let's just run the tool.
 
-            # ------------------------------------------------------------------
-            # STEP 4: EXECUTION CHECK
-            # ------------------------------------------------------------------
-            tool_call = self._extract_json(content)
-            
-            if tool_call and "arguments" in tool_call:
-                print(f"🚀 Executing: {tool_obj.name} with {tool_call['arguments']}")
+                result = ""
                 try:
-                    # 2. CHANGE: Access the 'function' attribute directly
                     func = tool_obj.function
-                    
-                    # 3. CHANGE: Handle Async execution
-                    if inspect.iscoroutinefunction(func):
-                        result = await func(**tool_call["arguments"])
+                    if inspect.isasyncgenfunction(func):
+                        async for item in func(**tool_call["arguments"]):
+                            print(item) 
+                            yield str(item)
+                            result += str(item) + "\n"
+                    elif inspect.iscoroutinefunction(func):
+                        res = await func(**tool_call["arguments"])
+                        yield str(res)
+                        result = str(res)
                     else:
-                        result = func(**tool_call["arguments"])
-
+                        res = func(**tool_call["arguments"])
+                        yield str(res)
+                        result = str(res)
                 except Exception as e:
-                    result = f"❌ Error: {e}"
-                    print(result) # Print stack trace for debugging if needed
+                    result = f"❌ Tool error: {e}"
+                    yield result
+                
+                # Append full turn to history
+                self.history.append(HumanMessage(content=user_input))
+                self.history.append(AIMessage(content=str(result)))
+                return
+            else:
+                 content = f"❌ Error: LLM hallucinated tool '{tool_name}'"
 
-                # Reset state after execution
-                self.history = []
-                self.active_tool_name = None
-                return result
-
-            # ------------------------------------------------------------------
-            # STEP 5: CONTINUE DIALOGUE
-            # ------------------------------------------------------------------
-            self.history.append(HumanMessage(content=user_input))
-            self.history.append(AIMessage(content=content))
-            return content
+        # If no tool call or just chat/question
+        self.history.append(HumanMessage(content=user_input))
+        self.history.append(AIMessage(content=content))
+        yield content
