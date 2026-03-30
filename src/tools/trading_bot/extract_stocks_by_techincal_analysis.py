@@ -10,7 +10,8 @@ URL_MAPPING = {
     "MACD_Bullish": "https://chartink.com/screener/macd-bullish-crossover",
     "MACD_Bullish_RSI": "https://chartink.com/screener/rsi-crossed-above-60-macd-cross-over-macd-signal",
     "MACD_Bullish_ADX": "https://chartink.com/screener/macd-bullish-crossover-with-adx-25-adx-di-adx-di",
-    "RSI_70_Above": "https://chartink.com/screener/rsi-above-70-2"
+    "RSI_70_Above": "https://chartink.com/screener/rsi-above-70-2",
+    "Simple" : "https://chartink.com/screener/macd-bearish-or-bullish-crossover"
 }
 
 def makeTool(router):

@@ -81,7 +81,7 @@ def makeTool(router):
                  return "⚠️ No valid tickers provided or all failed."
 
             return "\n".join(summary)
-
+    
         return DynamicTool(
             name="check_stock_price",
             description="Get live stock market data using Yahoo Finance",

@@ -12,6 +12,7 @@ from src.controller.stock_controller import router as stock_router
 from src.controller.news_controller import router as news_router
 from src.controller.conversation_controller import router as conversation_router
 from src.controller.learning_controller import router as learning_router
+from src.tools.trading_bot import router as planning_tools_router
 from src.core.manager import ConnectionManager
 import asyncio
 import sys
@@ -91,6 +92,7 @@ app.include_router(stock_router)
 app.include_router(news_router)
 app.include_router(conversation_router)
 app.include_router(learning_router)
+app.include_router(planning_tools_router)
 
 if __name__ == "__main__":
     import uvicorn
