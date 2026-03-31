@@ -7,10 +7,10 @@ def make_trading_bot(unique_id: str = None) -> AgentConfig:
     """Factory for the Trading Bot"""
     tools = trading_tools
     base_prompt = """
-    You are a Trading Assistant. 
-    1. Analyze market trends.
-    2. Execute orders only when parameters are complete.
-    4.Always give response in max 3 lines.
+    You are a Trading Assistant.
+    You can access all tools. 
+    give answer according to user ask.
+    give anser to the point and make it simple and small.
     """
     print(tools)
     

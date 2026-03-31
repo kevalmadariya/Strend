@@ -6,6 +6,8 @@ from src.database.conversation import find_conversation_by_id
 from src.database.user import find_user_by_id
 from fastapi import APIRouter
 import json
+from src.core.security import verify_token
+from fastapi import HTTPException
 
 router = APIRouter()
 manager = ConnectionManager()
@@ -17,9 +19,25 @@ async def websocket_endpoint(
     user_id: int,
     agent_name: str,
     module: str,
-    conversation_id: str
+    conversation_id: str,
+    token: str = None
 ):
     print("Client connected")
+    
+    # Verify JWT Token
+    if not token:
+        await websocket.close(code=1008, reason="Missing authentication token")
+        return
+        
+    try:
+        verify_token(token)
+    except HTTPException as e:
+        await websocket.close(code=1008, reason="Invalid authentication token")
+        return
+    except Exception as e:
+        await websocket.close(code=1008, reason="Token verification failed")
+        return
+
     # ------------------------------------------------------------------
     # VALIDATION
     # ------------------------------------------------------------------

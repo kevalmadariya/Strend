@@ -224,6 +224,7 @@ def makeTool(router):
                         "rating": rating,
                         "scored_percentage" :score_percentage 
                     })
+                
 
                 except Exception as e:
                     print(f"❌ Error processing {ticker}: {e}")
@@ -234,7 +235,7 @@ def makeTool(router):
 
             cur.close()
             conn.close()
-            
+
             yield "\n".join([
                 f"Stock: {res['ticker']} | Risk: {res.get('risk_level', 'N/A')} | "
                 f"Rating: {res.get('rating', 'N/A')} | Scored: {res.get('scored_percentage', 'N/A')}" 

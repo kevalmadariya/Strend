@@ -6,6 +6,7 @@ from ..base import DynamicTool
 from ..base import ToolParam
 from datetime import date
 from typing import Optional
+import json
 
 def makeTool(router):
     """
@@ -36,7 +37,7 @@ def makeTool(router):
                         all_tickers.add(t)
 
             if not all_tickers:
-                 return "⚠️ No valid tickers provided. Please specify tickers or mention them in the text."
+                 yield "⚠️ No valid tickers provided. Please specify tickers or mention them in the text."
 
             print(f"✅ [ID: {unique_id}] Fetching yfinance data for: {all_tickers}")
             
@@ -78,9 +79,16 @@ def makeTool(router):
                 summary.append(f"❌ Failed to fetch {len(errors)} stocks: {', '.join(errors)}")
             
             if not summary:
-                 return "⚠️ No valid tickers provided or all failed."
+                 yield "⚠️ No valid tickers provided or all failed."
 
-            return "\n".join(summary)
+            yield "\n".join(summary)
+
+            yield "\n\n\n"
+            
+            yield json.dumps({
+                "status": "success",
+                "data": results
+            })
     
         return DynamicTool(
             name="check_stock_price",

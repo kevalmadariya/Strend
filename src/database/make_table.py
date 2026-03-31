@@ -1,20 +1,28 @@
 import psycopg2
+import os
+from dotenv import load_dotenv
+
+# Load .env
+load_dotenv()
 
 try:
     conn = psycopg2.connect(
-        host="127.0.0.1",
-        port=5433,  
-        user="postgres",
-        password="12345"
+        host=os.getenv("DB_HOST", "127.0.0.1"),
+        port=os.getenv("DB_PORT", "5433"),
+        user=os.getenv("DB_USER", "postgres"),
+        password=os.getenv("DB_PASSWORD", "12345")
     )
     print("Successfully connected to the 'strend' database!")
     # ... your table creation code ...
     
 except Exception as e:
     print(f"Connection failed: {e}")
+    import sys
+    sys.exit(1)
 
 cur = conn.cursor()
 # # SQL statements to create tables
+# # 1:trading_bot , 2:fundamental_analysis_agent , 3:news_agent , 4:technical_analysis_agent , 5:watchlist_agent
 create_tables_sql = [
     """
     CREATE TABLE IF NOT EXISTS agent (
@@ -22,6 +30,13 @@ create_tables_sql = [
         template TEXT,
         user_id INT
     );
+    """,
+    """
+    INSERT INTO agent (template, user_id) VALUES ('trading_bot', 1);
+    INSERT INTO agent (template, user_id) VALUES ('fundamental_analysis_agent', 1);
+    INSERT INTO agent (template, user_id) VALUES ('news_agent', 1);
+    INSERT INTO agent (template, user_id) VALUES ('technical_analysis_agent', 1);
+    INSERT INTO agent (template, user_id) VALUES ('watchlist_agent', 1);
     """,
     """
     CREATE TABLE IF NOT EXISTS "user" (

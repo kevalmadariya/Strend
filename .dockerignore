@@ -1,0 +1,17 @@
+.git
+.venv
+__pycache__
+*.pyc
+.env
+.pytest_cache
+*.log
+vector_db
+playit_data
+temp
+server_log.txt
+
+Diagrams
+Diagrams.zip
+Documentations
+format.txt
+StockMarket_changes.ipynb

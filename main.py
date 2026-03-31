@@ -15,10 +15,15 @@ from src.controller.learning_controller import router as learning_router
 from src.tools.trading_bot import router as planning_tools_router
 from src.core.manager import ConnectionManager
 import asyncio
+import os
 import sys
+from dotenv import load_dotenv
+load_dotenv()
+
 # --- FIX START ---
 # This forces Windows to use the correct Event Loop for Playwright
-if sys.platform == 'win32':
+# Uses ENVIRONMENT_OS from .env, fallback to sys.platform
+if os.getenv("ENVIRONMENT_OS", sys.platform) == 'win32':
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 from src.core.multi_processor import lifespan
@@ -26,6 +31,9 @@ from src.core.multi_processor import lifespan
 app = FastAPI(lifespan=lifespan)
 
 from fastapi.middleware.cors import CORSMiddleware
+from src.core.auth_middleware import JWTAuthMiddleware
+
+app.add_middleware(JWTAuthMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
