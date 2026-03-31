@@ -31,7 +31,10 @@ def prediction_worker_wrapper(email, max_price, required_trend, analysis_months)
     
     # Run the async workflow in a new event loop for this process
     try:
-        if sys.platform == 'win32':
+        import os
+        from dotenv import load_dotenv
+        load_dotenv()
+        if os.getenv("ENVIRONMENT_OS", sys.platform) == 'win32':
             asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
             
         return asyncio.run(

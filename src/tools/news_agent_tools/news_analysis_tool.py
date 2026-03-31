@@ -28,7 +28,6 @@ def makeTool(router):
                     password=os.getenv("DB_PASSWORD", "12345")
                 )
             except Exception as e:
-                # Fallback purely as per previous logic, but ideally everything should be in .env
                 print(f"⚠️ Primary DB connection failed: {e}")
                 raise e
 

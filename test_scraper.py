@@ -3,8 +3,12 @@ import asyncio
 import sys
 from src.tools.utils.chartink_scraper import fetch_chartink_data
 
+import os
+from dotenv import load_dotenv
+load_dotenv()
+
 # Ensure Proactor on Windows
-if sys.platform == 'win32':
+if os.getenv("ENVIRONMENT_OS", sys.platform) == 'win32':
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 async def test():

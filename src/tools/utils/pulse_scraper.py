@@ -7,15 +7,28 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import os
-from datetime import date
+from datetime import date, timedelta
+import shutil
 
 async def extract_pulse_news(domain: str = None):
     """
     Scrapes news from Pulse by Zerodha.
     Checks local JSON cache first. If missing, scrapes and saves to cache.
     """
-    cache_path = os.getenv("PULSE_DATA_PATH", r"c:\General\Strend\playit_data\pulse_news")
-    cache_path = cache_path + "/" + date.today().strftime("%Y-%m-%d") + "/pulse_news.json"   # 1. Check Cache
+    base_cache_path = os.getenv("PULSE_DATA_PATH", r"c:\General\Strend\playit_data\pulse_news")
+    
+    # 0. Cleanup Yesterday's Cache
+    yesterday = (date.today() - timedelta(days=1)).strftime("%Y-%m-%d")
+    yesterday_folder = os.path.join(base_cache_path, yesterday)
+    if os.path.exists(yesterday_folder):
+        try:
+            shutil.rmtree(yesterday_folder)
+            print(f"🗑️ [Pulse Scraper] Deleted yesterday's cache: {yesterday_folder}")
+        except Exception as e:
+            print(f"⚠️ [Pulse Scraper] Failed to delete yesterday's cache: {e}")
+
+    # 1. Check Today's Cache
+    cache_path = os.path.join(base_cache_path, date.today().strftime("%Y-%m-%d"), "pulse_news.json")
     if os.path.exists(cache_path):
         print(f"📂 [Pulse Scraper] Reading from cache: {cache_path}")
         try:

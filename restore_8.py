@@ -1,6 +1,17 @@
 import psycopg2
+import os
+from dotenv import load_dotenv
+
+# Load .env
+load_dotenv()
+
 try:
-    conn = psycopg2.connect(host='127.0.0.1', port=5433, user='postgres', password='12345')
+    conn = psycopg2.connect(
+        host=os.getenv("DB_HOST", "127.0.0.1"),
+        port=os.getenv("DB_PORT", "5433"),
+        user=os.getenv("DB_USER", "postgres"),
+        password=os.getenv("DB_PASSWORD", "12345")
+    )
     cur = conn.cursor()
     # Check if '8' exists, if not insert it.
     cur.execute("SELECT conversation_id FROM conversation WHERE conversation_id = '8'")

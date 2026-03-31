@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from typing import Optional
 from src.core.db import get_db_connection
 import psycopg2
+from src.core.security import create_access_token
 
 router = APIRouter()
 
@@ -63,6 +64,11 @@ def register(data: RegisterRequest):
             "joinedAt": "Just now" 
         }
         
+        # Issue JWT Token
+        token = create_access_token({"sub": str(new_user[0]), "email": new_user[2]})
+        user_response["access_token"] = token
+        user_response["token_type"] = "bearer"
+
         print(f"DEBUG: Registration successful: {user_response}")
         
         cur.close()
@@ -111,6 +117,12 @@ def login(data: LoginRequest):
                 "email": user[2],
                 "joinedAt": "Unknown" 
             }
+            
+            # Issue JWT Token
+            token = create_access_token({"sub": str(user[0]), "email": user[2]})
+            user_response["access_token"] = token
+            user_response["token_type"] = "bearer"
+
             print(f"DEBUG: Login successful for user: {user_response}")
             cur.close()
             conn.close()
