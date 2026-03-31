@@ -17,9 +17,12 @@ try:
     
 except Exception as e:
     print(f"Connection failed: {e}")
+    import sys
+    sys.exit(1)
 
 cur = conn.cursor()
 # # SQL statements to create tables
+# # 1:trading_bot , 2:fundamental_analysis_agent , 3:news_agent , 4:technical_analysis_agent , 5:watchlist_agent
 create_tables_sql = [
     """
     CREATE TABLE IF NOT EXISTS agent (
@@ -27,6 +30,13 @@ create_tables_sql = [
         template TEXT,
         user_id INT
     );
+    """,
+    """
+    INSERT INTO agent (template, user_id) VALUES ('trading_bot', 1);
+    INSERT INTO agent (template, user_id) VALUES ('fundamental_analysis_agent', 1);
+    INSERT INTO agent (template, user_id) VALUES ('news_agent', 1);
+    INSERT INTO agent (template, user_id) VALUES ('technical_analysis_agent', 1);
+    INSERT INTO agent (template, user_id) VALUES ('watchlist_agent', 1);
     """,
     """
     CREATE TABLE IF NOT EXISTS "user" (
