@@ -8,6 +8,7 @@ from fastapi import APIRouter
 import json
 from src.core.security import verify_token
 from fastapi import HTTPException
+from src.controller.conversation_controller import save_conversation_message, MessageCreate
 
 router = APIRouter()
 manager = ConnectionManager()
@@ -72,8 +73,12 @@ async def websocket_endpoint(
         while True:
             # Receive user message
             user_message = await websocket.receive_text()
+            user_message_json = json.loads(user_message)
 
+            save_conversation_message(MessageCreate(conversation_id=conversation_id, sender_type="user", content=user_message_json["text"]))
             # 🔥 Invoke agent
+            full_content = ""
+
             async for chunk in invoke_agent(
                 user_id=user_id,
                 agent_name=agent_name,
@@ -81,7 +86,10 @@ async def websocket_endpoint(
                 user_message=user_message
             ):
                 # Send response back ONLY to this client
-                await websocket.send_text(str(chunk))
+                content_piece = str(chunk)
+                full_content += content_piece
+                await websocket.send_text(content_piece)
+            save_conversation_message(MessageCreate(conversation_id=conversation_id, sender_type="agent", content=full_content))
 
     except WebSocketDisconnect:
         manager.disconnect(websocket)

@@ -1,0 +1,10 @@
+﻿Running Database Initializations...
+Successfully connected to the 'strend' database!
+All tables created successfully in PostgreSQL database!
+Starting FastAPI Server...
+2026-03-31 17:13:57,953 - news_cron_job - INFO - Initializing Pulse News Cron Job Scheduler...
+2026-03-31 17:13:57,953 - news_cron_job - INFO - Configured cron schedule: '0 9 * * *'
+2026-03-31 17:13:57,965 - apscheduler.scheduler - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-03-31 17:13:57,966 - apscheduler.scheduler - INFO - Added job "job" to job store "default"
+2026-03-31 17:13:57,966 - apscheduler.scheduler - INFO - Scheduler started
+2026-03-31 17:13:57,966 - news_cron_job - INFO - Scheduler started successfully. Attached to FastAPI Event Loop.

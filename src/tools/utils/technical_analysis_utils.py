@@ -7,12 +7,12 @@ from typing import List, Dict, Optional
 import json
 
 # Try importing talib
-try:
-    import talib
-    HAVE_TALIB = True
-except ImportError:
-    HAVE_TALIB = False
-    print("⚠️ TA-Lib not found. Chart patterns will be disabled.")
+# try:
+#     import talib
+#     HAVE_TALIB = True
+# except ImportError:
+#     HAVE_TALIB = False
+#     print("⚠️ TA-Lib not found. Chart patterns will be disabled.")
 
 def normalize_ticker(ticker: str) -> str:
     """Normalize ticker to Yahoo Finance format (NSE)."""
@@ -61,62 +61,62 @@ def calculate_trend(ticker: str, start_date: date, end_date: date) -> int:
         print(f"❌ Error calculating trend for {ticker}: {e}")
         return 0
 
-def calculate_chart_patterns(ticker: str, start_date: date, end_date: date) -> Optional[str]:
-    """Calculate recent chart patterns using TA-Lib."""
-    if not HAVE_TALIB:
-        return "TA-Lib not installed"
+# def calculate_chart_patterns(ticker: str, start_date: date, end_date: date) -> Optional[str]:
+#     """Calculate recent chart patterns using TA-Lib."""
+#     if not HAVE_TALIB:
+#         return "TA-Lib not installed"
 
-    print(f"📉 Fetching candlestick patterns for {ticker}")
-    ticker_ns = normalize_ticker(ticker)
+#     print(f"📉 Fetching candlestick patterns for {ticker}")
+#     ticker_ns = normalize_ticker(ticker)
 
-    try:
-        data = yf.download(ticker_ns, start=start_date, end=end_date, progress=False)
+#     try:
+#         data = yf.download(ticker_ns, start=start_date, end=end_date, progress=False)
 
-        if data.empty:
-            return None
+#         if data.empty:
+#             return None
 
-        # Flatten MultiIndex safely
-        if isinstance(data.columns, pd.MultiIndex):
-            data.columns = ['_'.join(col).strip() if col[1] else col[0] for col in data.columns.values]
+#         # Flatten MultiIndex safely
+#         if isinstance(data.columns, pd.MultiIndex):
+#             data.columns = ['_'.join(col).strip() if col[1] else col[0] for col in data.columns.values]
 
-        # Identify columns
-        open_col = next((c for c in data.columns if c.startswith('Open')), None)
-        high_col = next((c for c in data.columns if c.startswith('High')), None)
-        low_col = next((c for c in data.columns if c.startswith('Low')), None)
-        close_col = next((c for c in data.columns if c.startswith('Close')), None)
+#         # Identify columns
+#         open_col = next((c for c in data.columns if c.startswith('Open')), None)
+#         high_col = next((c for c in data.columns if c.startswith('High')), None)
+#         low_col = next((c for c in data.columns if c.startswith('Low')), None)
+#         close_col = next((c for c in data.columns if c.startswith('Close')), None)
 
-        if not all([open_col, high_col, low_col, close_col]):
-            print(f"⚠️ Missing OHLC columns for {ticker}.")
-            return None
+#         if not all([open_col, high_col, low_col, close_col]):
+#             print(f"⚠️ Missing OHLC columns for {ticker}.")
+#             return None
 
-        # Apply TA-LIB patterns
-        patterns_found = []
+#         # Apply TA-LIB patterns
+#         patterns_found = []
         
-        # Define pattern functions map for easier iteration/extension
-        pattern_funcs = {
-            'Bullish Engulfing': talib.CDLENGULFING,
-            'Morning Star': talib.CDLMORNINGSTAR,
-            '3 White Soldiers': talib.CDL3WHITESOLDIERS,
-            'Evening Star': talib.CDLEVENINGSTAR,
-            '3 Black Crows': talib.CDL3BLACKCROWS
-        }
+#         # Define pattern functions map for easier iteration/extension
+#         pattern_funcs = {
+#             'Bullish Engulfing': talib.CDLENGULFING,
+#             'Morning Star': talib.CDLMORNINGSTAR,
+#             '3 White Soldiers': talib.CDL3WHITESOLDIERS,
+#             'Evening Star': talib.CDLEVENINGSTAR,
+#             '3 Black Crows': talib.CDL3BLACKCROWS
+#         }
 
-        any_pattern_detected = False
-        detected_patterns = []
+#         any_pattern_detected = False
+#         detected_patterns = []
 
-        for name, func in pattern_funcs.items():
-            res = func(data[open_col], data[high_col], data[low_col], data[close_col])
-            if res.iloc[-1] != 0:
-                detected_patterns.append(name)
+#         for name, func in pattern_funcs.items():
+#             res = func(data[open_col], data[high_col], data[low_col], data[close_col])
+#             if res.iloc[-1] != 0:
+#                 detected_patterns.append(name)
         
-        if not detected_patterns:
-            return None
+#         if not detected_patterns:
+#             return None
             
-        return ", ".join(detected_patterns)
+#         return ", ".join(detected_patterns)
 
-    except Exception as e:
-        print(f"❌ Error calculating patterns for {ticker}: {e}")
-        return None
+#     except Exception as e:
+#         print(f"❌ Error calculating patterns for {ticker}: {e}")
+#         return None
 
 def calculate_indicators(ticker: str, start_date: date, end_date: date) -> Dict:
     """Calculate MACD, RSI, ADX."""
@@ -164,3 +164,39 @@ def calculate_indicators(ticker: str, start_date: date, end_date: date) -> Dict:
     except Exception as e:
         print(f"❌ Error calculating indicators for {ticker}: {e}")
         return indicators
+
+def calculate_roc(ticker: str, period: int = 12, interval: str = "5m") -> float:
+    """
+    Calculate Rate of Change (ROC) for a given ticker.
+    ROC = ((Current Close - Close n periods ago) / Close n periods ago) * 100
+    """
+    print(f"📈 Calculating ROC for {ticker} (interval={interval}, period={period})")
+    ticker_ns = normalize_ticker(ticker)
+    
+    try:
+        # For 5m interval, we usually need just a few days of data
+        # Fetching '5d' to be safe for a '12' period ROC on '5m' data
+        data = yf.download(ticker_ns, period="5d", interval=interval, progress=False)
+        
+        if data.empty:
+            return 0.0
+
+        # Flatten MultiIndex safely
+        if isinstance(data.columns, pd.MultiIndex):
+            data.columns = ['_'.join(col).strip() if col[1] else col[0] for col in data.columns.values]
+
+        close_col = next((c for c in data.columns if c.startswith('Close')), None)
+        if not close_col:
+            return 0.0
+
+        # pandas_ta roc
+        roc_series = ta.roc(data[close_col], length=period)
+        
+        if roc_series is not None and not roc_series.empty:
+            return float(roc_series.iloc[-1])
+        
+        return 0.0
+
+    except Exception as e:
+        print(f"❌ Error calculating ROC for {ticker}: {e}")
+        return 0.0

@@ -6,8 +6,6 @@ from dotenv import load_dotenv
 
 from langchain_groq import ChatGroq
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
-from sentence_transformers import SentenceTransformer
-
 from src.agent.agents import get_agent_config
 # from src.core.vector_db import ToolVectorDB  # <-- Commented out
 

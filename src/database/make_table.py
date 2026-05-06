@@ -1,17 +1,13 @@
 import psycopg2
 import os
 from dotenv import load_dotenv
+from src.core.db import get_db_connection
 
 # Load .env
 load_dotenv()
 
 try:
-    conn = psycopg2.connect(
-        host=os.getenv("DB_HOST", "127.0.0.1"),
-        port=os.getenv("DB_PORT", "5433"),
-        user=os.getenv("DB_USER", "postgres"),
-        password=os.getenv("DB_PASSWORD", "12345")
-    )
+    conn = get_db_connection()
     print("Successfully connected to the 'strend' database!")
     # ... your table creation code ...
     
@@ -32,11 +28,11 @@ create_tables_sql = [
     );
     """,
     """
-    INSERT INTO agent (template, user_id) VALUES ('trading_bot', 1);
-    INSERT INTO agent (template, user_id) VALUES ('fundamental_analysis_agent', 1);
-    INSERT INTO agent (template, user_id) VALUES ('news_agent', 1);
-    INSERT INTO agent (template, user_id) VALUES ('technical_analysis_agent', 1);
-    INSERT INTO agent (template, user_id) VALUES ('watchlist_agent', 1);
+    INSERT INTO agent (template, user_id) VALUES ('trading_bot', 1) ON CONFLICT (template, user_id) DO NOTHING;
+    INSERT INTO agent (template, user_id) VALUES ('fundamental_analysis_agent', 1) ON CONFLICT (template, user_id) DO NOTHING;
+    INSERT INTO agent (template, user_id) VALUES ('news_agent', 1) ON CONFLICT (template, user_id) DO NOTHING;
+    INSERT INTO agent (template, user_id) VALUES ('technical_analysis_agent', 1) ON CONFLICT (template, user_id) DO NOTHING;
+    INSERT INTO agent (template, user_id) VALUES ('watchlist_agent', 1) ON CONFLICT (template, user_id) DO NOTHING;
     """,
     """
     CREATE TABLE IF NOT EXISTS "user" (

@@ -1,163 +1,120 @@
 import json
-from typing import List
-from ..base import DynamicTool, ToolParam
-from ..db import get_db_session  # your DB session helper
-import yfinance as yf
-import requests
-from bs4 import BeautifulSoup
+from typing import List, Optional
+from src.core.db import get_db_connection
 from datetime import date
-import asyncio
 
-# Import your existing WebScraping logic as a helper
-from .webscraper import WebScaping  # make sure this is modularized
+from src.tools.utils.get_yfinance_data import get_yfinance_data
+from ..base import DynamicTool, ToolParam
 
+# Import your existing WebScraping logic
+from src.tools.utils.webscraper import WebScaping 
+from src.tools.utils.fetch_and_store_fundametals import fetch_and_store_fundamentals
 
 def makeTool(router):
-    """
-    Factory function for the get_fundamentals Tool.
-    """
 
     def func(unique_id):
-        """
-        The outer function is called with agent unique_id.
-        """
 
-        async def get_fundamentals(tickers: List[str]):
-            """
-            Main function executed by the LLM when it calls this tool.
-            """
-            print(f"✅ Executing get_fundamentals for ID: {unique_id} with tickers: {tickers}")
+        async def get_fundamentals(tickers: Optional[List[str]] = None, text: Optional[str] = None):
+            import re
 
-            db = get_db_session()  # SQLAlchemy session or your DB helper
-            results = {}
+            all_tickers = set(tickers) if tickers else set()
+            
+            # Extract tickers from text if provided
+            if text:
+                # Regex to find potential tickers: UPPERCASE words with length >= 3
+                found_in_text = re.findall(r'\b[A-Z0-9]{3,}\b', text)
+                for t in found_in_text:
+                    if t not in ["AND", "FOR", "THE", "WITH", "ARE", "NOT", "YES", "CAN", "YOU", "BUT"]:
+                        all_tickers.add(t)
 
-            for ticker in tickers:
-                print(f"🔹 Processing ticker: {ticker}")
+            if not all_tickers:
+                 yield "⚠️ No tickers provided. Please specify tickers in the list or mention them in the text.\n"
+                 return
 
-                # 1️⃣ Scrape the fundamental data
-                ratios, charts, holdings, analysis = WebScaping(ticker, {}, {}, {}, {})
+            print(f"🚀 Getting fundamentals for: {all_tickers}")
+            conn = get_db_connection()
+            cur = conn.cursor()
+            
+            final_results = {}
+            tickers_to_fetch = []
+            
+            for ticker in all_tickers:
+                # Check for recent data
+                cur.execute("""
+                    SELECT 
+                        fa.date, 
+                        fa.industry, fa.description, fa.sector, fa.price, 
+                        fa.quickratio, fa.peg, fa.sales_growth, fa.roe, fa.roce, fa.profit_growth, 
+                        fa.cfo_pat_5_yr_avg, fa.debt_equity, fa.interest_cover_ratio,
+                        fa.market_cap, fa.enterprise_value, fa.no_of_shares, fa.p_e, fa.p_b, 
+                        fa.div_yield, fa.book_value_ttm, fa.cash, fa.debt, fa.promoter_holding, fa.eps_ttm 
+                    FROM stock s
+                    JOIN fundamental_analysis fa ON s.stock_id = fa.stock_id
+                    WHERE s.ticker = %s
+                    ORDER BY fa.date DESC
+                    LIMIT 1
+                """, (ticker,))
+                
+                row = cur.fetchone()
+                
+                is_cached = False
+                if row:
+                    last_fa_date = row[0]
+                    if last_fa_date:
+                        days_diff = (date.today() - last_fa_date).days
+                        if days_diff <= 30:
+                            # Reconstruct the ratios dict (matching fetch_and_store_fundamentals structure)
+                            ratios = {
+                                "Industry": row[1],
+                                "Description": row[2],
+                                "Sector": row[3],
+                                "Price": float(row[4]) if row[4] is not None else 0.0,
+                                "QuickRatio": float(row[5]) if row[5] is not None else None,
+                                "PEG": float(row[6]) if row[6] is not None else None,
+                                "Sales Growth": float(row[7]) if row[7] is not None else 0.0,
+                                "ROE": float(row[8]) if row[8] is not None else 0.0,
+                                "ROCE": float(row[9]) if row[9] is not None else 0.0,
+                                "Profit Growth": float(row[10]) if row[10] is not None else 0.0,
+                                "CFO/PAT (5 Yr. Avg.)": float(row[11]) if row[11] is not None else 0.0,
+                                "Debt/Equity": float(row[12]) if row[12] is not None else 0.0,
+                                "Interest Cover Ratio": float(row[13]) if row[13] is not None else 0.0,
+                                "Market Cap": float(row[14]) if row[14] is not None else 0.0,
+                                "Enterprise Value": float(row[15]) if row[15] is not None else 0.0,
+                                "No. of Shares": float(row[16]) if row[16] is not None else 0.0,
+                                "P/E": float(row[17]) if row[17] is not None else 0.0,
+                                "P/B": float(row[18]) if row[18] is not None else 0.0,
+                                "Div. Yield": float(row[19]) if row[19] is not None else 0.0,
+                                "Book Value (TTM)": float(row[20]) if row[20] is not None else 0.0,
+                                "CASH": float(row[21]) if row[21] is not None else 0.0,
+                                "DEBT": float(row[22]) if row[22] is not None else 0.0,
+                                "Promoter Holding": float(row[23]) if row[23] is not None else 0.0,
+                                "EPS (TTM)": float(row[24]) if row[24] is not None else 0.0
+                            }
+                            final_results[ticker] = ratios
+                            yield f"   ✅ Found cached fundamentals for {ticker} (Last updated: {last_fa_date})\n"
+                            is_cached = True
+            
+                if not is_cached:
+                    tickers_to_fetch.append(ticker)
+            
+            conn.close()
 
-                # 2️⃣ Add stock details if not exists
-                stock = db.query("SELECT stock_id FROM stock WHERE ticker=:ticker", {"ticker": ticker}).fetchone()
-                if not stock:
-                    stock_data = yf.Ticker(ticker).info
-                    db.execute(
-                        """
-                        INSERT INTO stock (name, ticker, price)
-                        VALUES (:name, :ticker, :price)
-                        RETURNING stock_id
-                        """,
-                        {
-                            "name": stock_data.get("shortName", ticker),
-                            "ticker": ticker,
-                            "price": ratios.get("Price", 0.0)
-                        }
-                    )
-                    stock_id = db.fetchone()[0]
-                else:
-                    stock_id = stock[0]
+            if tickers_to_fetch:
+                yield f"   🔄 Fetching fresh fundamentals for: {', '.join(tickers_to_fetch)}\n"
+                fresh_data = await fetch_and_store_fundamentals(tickers_to_fetch, unique_id)
+                if fresh_data and "data" in fresh_data:
+                    final_results.update(fresh_data["data"])
+            
+            yield json.dumps({"status": "success", "data": final_results})
 
-                # 3️⃣ Insert fundamental analysis
-                today = date.today()
-                db.execute(
-                    """
-                    INSERT INTO fundamental_analysis (
-                        stock_id, date, industry, description, sector, price, quickratio, peg,
-                        sales_growth, roe, roce, profit_growth, cfo_pat_5_yr_avg, debt_equity,
-                        interest_cover_ratio, strengths, limitations, promoter_q1, promoter_q2,
-                        promoter_q3, promoter_q4, pledge_q1, pledge_q2, pledge_q3, pledge_q4,
-                        fiis_q1, fiis_q2, fiis_q3, fiis_q4, diis_q1, diis_q2, diis_q3, diis_q4,
-                        government_q1, government_q2, government_q3, government_q4,
-                        public_q1, public_q2, public_q3, public_q4
-                    )
-                    VALUES (
-                        :stock_id, :date, :industry, :description, :sector, :price, :quickratio, :peg,
-                        :sales_growth, :roe, :roce, :profit_growth, :cfo_pat_5_yr_avg, :debt_equity,
-                        :interest_cover_ratio, :strengths, :limitations, :promoter_q1, :promoter_q2,
-                        :promoter_q3, :promoter_q4, :pledge_q1, :pledge_q2, :pledge_q3, :pledge_q4,
-                        :fiis_q1, :fiis_q2, :fiis_q3, :fiis_q4, :diis_q1, :diis_q2, :diis_q3, :diis_q4,
-                        :government_q1, :government_q2, :government_q3, :government_q4,
-                        :public_q1, :public_q2, :public_q3, :public_q4
-                    )
-                    ON CONFLICT (stock_id, date) DO UPDATE
-                    SET industry=:industry, description=:description, sector=:sector, price=:price
-                    """,
-                    {
-                        "stock_id": stock_id,
-                        "date": today,
-                        "industry": ratios.get("Industry"),
-                        "description": ratios.get("Description"),
-                        "sector": ratios.get("Sector"),
-                        "price": ratios.get("Price"),
-                        "quickratio": ratios.get("QuickRatio"),
-                        "peg": ratios.get("PEG"),
-                        "sales_growth": charts.get("SalesGrowth", 0.0),
-                        "roe": charts.get("ROE", 0.0),
-                        "roce": charts.get("ROCE", 0.0),
-                        "profit_growth": charts.get("ProfitGrowth", 0.0),
-                        "cfo_pat_5_yr_avg": ratios.get("CFO_PAT_5_YR_AVG", 0.0),
-                        "debt_equity": ratios.get("DebtEquity", 0.0),
-                        "interest_cover_ratio": ratios.get("InterestCoverRatio", 0.0),
-                        "strengths": str(analysis.get("Strength", [])),
-                        "limitations": str(analysis.get("Limitation", [])),
-                        "promoter_q1": holdings.get("PromoterQ1", 0.0),
-                        "promoter_q2": holdings.get("PromoterQ2", 0.0),
-                        "promoter_q3": holdings.get("PromoterQ3", 0.0),
-                        "promoter_q4": holdings.get("PromoterQ4", 0.0),
-                        "pledge_q1": holdings.get("PledgeQ1", 0.0),
-                        "pledge_q2": holdings.get("PledgeQ2", 0.0),
-                        "pledge_q3": holdings.get("PledgeQ3", 0.0),
-                        "pledge_q4": holdings.get("PledgeQ4", 0.0),
-                        "fiis_q1": holdings.get("FIIsQ1", 0.0),
-                        "fiis_q2": holdings.get("FIIsQ2", 0.0),
-                        "fiis_q3": holdings.get("FIIsQ3", 0.0),
-                        "fiis_q4": holdings.get("FIIsQ4", 0.0),
-                        "diis_q1": holdings.get("DIIsQ1", 0.0),
-                        "diis_q2": holdings.get("DIIsQ2", 0.0),
-                        "diis_q3": holdings.get("DIIsQ3", 0.0),
-                        "diis_q4": holdings.get("DIIsQ4", 0.0),
-                        "government_q1": holdings.get("GovernmentQ1", 0.0),
-                        "government_q2": holdings.get("GovernmentQ2", 0.0),
-                        "government_q3": holdings.get("GovernmentQ3", 0.0),
-                        "government_q4": holdings.get("GovernmentQ4", 0.0),
-                        "public_q1": holdings.get("PublicQ1", 0.0),
-                        "public_q2": holdings.get("PublicQ2", 0.0),
-                        "public_q3": holdings.get("PublicQ3", 0.0),
-                        "public_q4": holdings.get("PublicQ4", 0.0),
-                    },
-                )
-
-                db.commit()
-
-                # 4️⃣ Save results for frontend
-                results[ticker] = {
-                    "ratios": ratios,
-                    "charts": charts,
-                    "holdings": holdings,
-                    "analysis": analysis
-                }
-
-                yield json.dumps({
-                    "ticker": ticker,
-                    "status": "completed",
-                    "data": results[ticker]
-                })
-
-            return results
-
-        # 2. Return the DynamicTool definition
         return DynamicTool(
             name="get_fundamentals",
-            description="Fetch fundamental analysis for a list of tickers, scrape data, store in DB, and return JSON",
+            description="Fetch fundamental analysis for tickers",
             triggers=["Get fundamental analysis", "Fetch stock fundamentals"],
             function=get_fundamentals,
             parameters=[
-                ToolParam(
-                    name="tickers",
-                    type="list",
-                    description="List of stock tickers to fetch fundamentals for",
-                    required=True
-                )
+                ToolParam(name="tickers", type="list", required=False, description="List of stock tickers"),
+                ToolParam(name="text", type="string", required=False, description="Text containing stock tickers (e.g. 'Fundamentals of RELIANCE')")
             ],
             endpoint="/get-fundamentals",
             router=router

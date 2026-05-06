@@ -6,6 +6,7 @@ from ..base import ToolParam
 from src.tools.utils.news_scraper import scrape_news_from_groww
 import re
 from typing import Optional
+from src.core.db import get_db_connection
 import json
 
 def makeTool(router):
@@ -15,38 +16,62 @@ def makeTool(router):
     def func(unique_id):
 
         # --- Helper for DB Connection ---
-        def get_db_connection():
-            import os
-            from dotenv import load_dotenv
-            load_dotenv()
+        # def get_db_connection():
+        #     import os
+        #     from dotenv import load_dotenv
+        #     load_dotenv()
             
-            try:
-                return psycopg2.connect(
-                    host=os.getenv("DB_HOST", "127.0.0.1"),
-                    port=os.getenv("DB_PORT", "5433"),
-                    user=os.getenv("DB_USER", "postgres"),
-                    password=os.getenv("DB_PASSWORD", "12345")
-                )
-            except Exception as e:
-                # Fallback purely as per previous logic, but ideally everything should be in .env
-                print(f"⚠️ Primary DB connection failed: {e}")
-                raise e
+        #     try:
+        #         return psycopg2.connect(
+        #             host=os.getenv("DB_HOST", "127.0.0.1"),
+        #             port=os.getenv("DB_PORT", "5433"),
+        #             user=os.getenv("DB_USER", "postgres"),
+        #             password=os.getenv("DB_PASSWORD", "12345")
+        #         )
+        #     except Exception as e:
+        #         # Fallback purely as per previous logic, but ideally everything should be in .env
+        #         print(f"⚠️ Primary DB connection failed: {e}")
+        #         raise e
 
         def parse_ago(time_str):
-            """Parses '1h ago', '23m ago', '1d ago' into minutes."""
+            """Parses '1h ago', '23m ago', '1d ago', '2w ago' into minutes."""
             s = time_str.lower().strip()
             val = 0
+            
+            if 'a day' in s:
+                return 1440
+            
             match = re.search(r'(\d+)', s)
             if match:
                 val = int(match.group(1))
             
-            if 'h' in s:
-                val *= 60
-            elif 'd' in s:
+            # Logic for time units
+            if 'w' in s:            # Weeks
+                val *= 10080
+            elif 'd' in s:          # Days
                 val *= 1440
+            elif 'h' in s:          # Hours
+                val *= 60
+            elif 'months' in s:
+                val *= 43200
+            elif 'years' in s:
+                val *= 525600
             # 'm' is default (minutes)
+            
             return val
-
+        
+        def re_parse_ago(num:int):
+            if num < 60:
+                return f"{num} min ago"
+            elif num < 1440:
+                return f"{num // 60} hour ago"
+            elif num < 10080:
+                return f"{num // 1440} day ago"
+            elif num < 525600:
+                return f"{num // 10080} week ago"
+            else:
+                return f"{num // 525600} year ago"
+        
         def get_or_create_stock_id(cur, ticker):
             """
             Checks if stock exists for today. If not, creates a minimal entry.
@@ -69,7 +94,6 @@ def makeTool(router):
             """
             Checks DB for news for multiple tickers. Yields updates and results.
             """
-            yield f"Test: {unique_id}"
             
             all_tickers = set()
 
@@ -95,7 +119,7 @@ def makeTool(router):
                  yield "⚠️ No tickers provided. Please specify tickers in the list or mention them in the text."
                  return
 
-            yield f"🗞️ [ID: {unique_id}] Processing news for {len(all_tickers)} tickers: {all_tickers}"
+            yield f"🗞️ Processing news for {len(all_tickers)} tickers: {all_tickers}\n"
             
             conn = None
             try:
@@ -126,11 +150,11 @@ def makeTool(router):
                             existing_news = cur.fetchall()
 
                         if existing_news:
-                            yield f"✅ [DB] Found {len(existing_news)} cached news items for {clean_ticker}."
+                            yield f"{re_parse_ago(existing_news[0][0])} min ago : {existing_news[0][1]} \n"
                             for item in existing_news:
                                 results.append({
                                     "ticker": clean_ticker,
-                                    "ago_minutes": item[0],
+                                    "ago_minutes": re_parse_ago(item[0]),
                                     "news": item[1],
                                     "url": item[2],
                                     "date": str(item[3])
@@ -139,15 +163,13 @@ def makeTool(router):
                             continue
 
                         # 2. Scrape if not found
-                        yield f"🔄 [Scraper] No cache found for {clean_ticker}. Scraping Groww..."
+                        yield f"🔄 [Scraper] No cache found for {clean_ticker}\n"
                         scraped_data = await scrape_news_from_groww(clean_ticker)
                         
                         if not scraped_data:
-                            yield f"❌ No news found for {clean_ticker}."
+                            yield f"❌ No news found for {clean_ticker}.\n"
                             continue
 
-                        # 3. Store Results
-                        yield f"💾 [DB] Saving {len(scraped_data)} items for {clean_ticker}..."
                         
                         stock_id = get_or_create_stock_id(cur, clean_ticker)
                         
@@ -165,13 +187,12 @@ def makeTool(router):
                                 print(f"⚠️ [DB] Insert Error: {e}")
                         
                         conn.commit()
-                        yield f"✅ [DB] Successfully saved {saved_count} items for {clean_ticker}."
                         
                         # Standardize scraped data to match results format
                         for item in scraped_data:
                             results.append({
                                 "ticker": clean_ticker,
-                                "ago_minutes": parse_ago(item['time_str']),
+                                "ago_minutes": item['time_str'],
                                 "news": item['news'],
                                 "url": item['url'],
                                 "date": str(date.today())
@@ -180,7 +201,7 @@ def makeTool(router):
                     except Exception as e_inner:
                         yield f"❌ Error processing {clean_ticker}: {str(e_inner)}"
                 
-                yield "\n\n\n"
+                yield "\n\n"
                 
                 yield json.dumps({
                     "status": "success",

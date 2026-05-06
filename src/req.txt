@@ -1,0 +1,2 @@
+1.redis for caching
+2.generic playwrite scraper for any website
