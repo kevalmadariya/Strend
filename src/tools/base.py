@@ -23,6 +23,7 @@ class ToolParam(BaseModel):
 class DynamicTool(BaseModel):
     name: str
     description: str
+    trigger: str = ""
     parameters: List[ToolParam]
     # Supports Sync/Async Functions and Generators
     function: Union[

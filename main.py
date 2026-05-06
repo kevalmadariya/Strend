@@ -6,6 +6,7 @@ from src.database.generic import insert_one
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect,APIRouter
 from typing import List
 from src.controller.agent_ws import router
+from src.controller.excel_ws import router as excel_router
 from src.core.manager import ConnectionManager
 
 app = FastAPI()
@@ -61,6 +62,7 @@ def add_database():
     print("Inserted user_id:", user_id)
 
 app.include_router(router)
+app.include_router(excel_router)
 
 if __name__ == "__main__":
     import uvicorn
