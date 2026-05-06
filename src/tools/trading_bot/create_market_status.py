@@ -21,7 +21,7 @@ def makeTool(router):
         return DynamicTool(
             name="check_market_status",
             description="Create market status",
-            triggers="Create market status for a region",
+            triggers=["Create market status for a region","Create forecast order"],
             function=create_forecast, # Pass the function defined above
             parameters=[
                 ToolParam(

@@ -9,3 +9,22 @@ wheels/
 # Virtual environments
 .venv
 .env
+
+# Playit data
+playit_data/*
+
+# Temporary files
+temp/*
+
+temp
+playit_data
+
+
+#temp folders
+Diagrams
+Documentations
+format.txt
+Diagrams.zip
+
+# Strategy cache (daily Excel exports)
+cache/

@@ -121,7 +121,7 @@ def create_table(conn: sqlite3.Connection, table_name: str, schema: Dict[str, st
     sql = f'CREATE TABLE IF NOT EXISTS "{table_name}" (id INTEGER PRIMARY KEY AUTOINCREMENT, {columns_sql});'
     conn.execute(sql)
     conn.commit()
-    print(f"✅ Created table '{table_name}' with {len(schema)} columns")
+    print(f"[+] Created table '{table_name}' with {len(schema)} columns")
 
 
 # ─── Data Loading ────────────────────────────────────────────────────────────
@@ -154,7 +154,7 @@ def bulk_insert(conn: sqlite3.Connection, table_name: str, rows: List[Dict[str, 
     conn.commit()
 
     count = len(values_batch)
-    print(f"✅ Inserted {count} rows into '{table_name}'")
+    print(f"[+] Inserted {count} rows into '{table_name}'")
     return count
 
 

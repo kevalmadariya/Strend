@@ -21,9 +21,9 @@ def makeTool(router):
             """
             from src.utils.excel_agent.excel_parser import parse_excel_json
             from src.utils.excel_agent.schema_ops import (
-                infer_column_types, create_table, bulk_insert
+                infer_column_types, create_table, bulk_insert, get_all_tables
             )
-            from src.core.sqlite_manager import get_connection
+            from src.core.sqlite_manager import get_connection, has_session, create_temp_db
 
             # Parse the incoming JSON
             try:
@@ -35,13 +35,21 @@ def makeTool(router):
             try:
                 columns, rows = parse_excel_json(data)
                 schema = infer_column_types(rows[:2])
+                
+                if not has_session(unique_id):
+                    create_temp_db(unique_id)
                 conn = get_connection(unique_id)
-                create_table(conn, "excel_data", schema)
-                count = bulk_insert(conn, "excel_data", rows)
+                
+                tables = get_all_tables(conn)
+                excel_tables = [t for t in tables if t.startswith("excel_data")]
+                table_name = "excel_data" if not excel_tables else f"excel_data_{len(excel_tables) + 1}"
+                
+                create_table(conn, table_name, schema)
+                count = bulk_insert(conn, table_name, rows)
 
                 return json.dumps({
                     "status": "success",
-                    "table": "excel_data",
+                    "table": table_name,
                     "columns": columns,
                     "column_types": schema,
                     "rows_inserted": count,

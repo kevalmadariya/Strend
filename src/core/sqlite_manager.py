@@ -49,7 +49,7 @@ def create_temp_db(session_id: str) -> sqlite3.Connection:
         conn.execute("PRAGMA journal_mode=WAL;")  # Better concurrent reads
 
         _connections[session_id] = conn
-        print(f"📂 Created temp DB: {db_file}")
+        print(f"[+] Created temp DB: {db_file}")
         return conn
 
 
@@ -92,9 +92,9 @@ def destroy_temp_db(session_id: str) -> None:
     if os.path.exists(db_file):
         try:
             os.remove(db_file)
-            print(f"🗑️ Destroyed temp DB: {db_file}")
+            print(f"[-] Destroyed temp DB: {db_file}")
         except OSError as e:
-            print(f"⚠️ Failed to delete DB file {db_file}: {e}")
+            print(f"[!] Failed to delete DB file {db_file}: {e}")
 
     # Also clean up WAL/SHM files if they exist
     for suffix in ("-wal", "-shm"):

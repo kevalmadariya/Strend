@@ -40,7 +40,7 @@ def makeTool(router):
                 llm = ChatGroq(model_name="llama-3.3-70b-versatile", temperature=0)
                 sqls = build_computed_column_sql(llm, column_name, formula, schema, table_name)
 
-                print(f"🔧 Computed column SQL: {sqls}")
+                print(f"[+] Computed column SQL: {sqls}")
 
                 # Validate each statement
                 for sql in sqls:

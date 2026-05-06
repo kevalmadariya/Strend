@@ -6,14 +6,28 @@ from src.agent.bot import PlanningAgent  # adjust import path
 _AGENT_SESSIONS: Dict[str, PlanningAgent] = {}
 
 
-def _make_session_key(user_id: int, agent_name: str, conversation_id: int) -> str:
+def _make_session_key(user_id: int, agent_name: str, conversation_id: str) -> str:
     return f"{user_id}:{agent_name}:{conversation_id}"
+
+
+def initialize_agent_session(
+    user_id: int,
+    agent_name: str,
+    conversation_id: str
+) -> None:
+    """
+    Explicitly initialize the agent session if it doesn't exist.
+    """
+    session_key = _make_session_key(user_id, agent_name, conversation_id)
+    if session_key not in _AGENT_SESSIONS:
+        # This will trigger the __init__ of PlanningAgent, loading tools etc.
+        _AGENT_SESSIONS[session_key] = PlanningAgent(agent_name=agent_name, unique_id=conversation_id)
 
 
 async def invoke_agent(
     user_id: int,
     agent_name: str,
-    conversation_id: int,
+    conversation_id: str,
     user_message: str
 ) -> str:
     """
@@ -26,12 +40,11 @@ async def invoke_agent(
         _AGENT_SESSIONS[session_key] = PlanningAgent(agent_name=agent_name, unique_id=conversation_id)
 
     bot = _AGENT_SESSIONS[session_key]
-    response =await bot.run(user_message)
+    async for chunk in bot.run(user_message):
+        yield chunk
 
-    return response
 
-
-def cleanup_agent_session(user_id: int, agent_name: str, conversation_id: int):
+def cleanup_agent_session(user_id: int, agent_name: str, conversation_id: str):
     """Cleanup memory when websocket disconnects"""
     session_key = _make_session_key(user_id, agent_name, conversation_id)
     _AGENT_SESSIONS.pop(session_key, None)

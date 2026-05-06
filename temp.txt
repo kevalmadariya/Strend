@@ -1,0 +1,22 @@
+Excel agent:
+
+usecases : 
+1.comapre two Excel
+2.read multiple Excel and extract specific data from each file
+3.add this two coloumn in Excel
+4.analyze each stocks given in the excel file and do so and so thing add whatever column needed give me excel back.
+
+
+
+how working.
+
+using websocket get data in json format and do not pass this json data to llm
+only pass columns name and one row for example of data to llm.
+now using tool store excel data into some temp (session) db.
+if multiple excel given then make multiple temp db.(excel agent connection close as soon as remove all temp db)
+now based on user query llm think and make query only.
+using another tool run query and get data from temp db.
+then send this data using websocket yield { yield json.dumps({"status": "success", "data": final_results}) }
+
+based on query if new data needed for stock then call tool (fetch_stock_data). 
+

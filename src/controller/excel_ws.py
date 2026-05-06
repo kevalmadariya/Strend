@@ -86,14 +86,14 @@ async def _handle_file_upload(websocket: WebSocket, session_id: str, data: dict)
             "message": f"✅ Loaded {count} rows into '{table_name}' with {len(columns)} columns"
         }))
 
-        print(f"📊 Excel loaded: {table_name} ({count} rows, {len(columns)} cols)")
+        print(f"[+] Excel loaded: {table_name} ({count} rows, {len(columns)} cols)")
 
     except Exception as e:
         await websocket.send_text(json.dumps({
             "status": "error",
             "error": f"Failed to process file: {str(e)}"
         }))
-        print(f"❌ File upload error: {e}")
+        print(f"[!] File upload error: {e}")
 
 
 async def _handle_query(websocket: WebSocket, session_id: str, user_message: str) -> None:
@@ -116,7 +116,7 @@ async def _handle_query(websocket: WebSocket, session_id: str, user_message: str
             "status": "error",
             "error": f"Agent error: {str(e)}"
         }))
-        print(f"❌ Agent error: {e}")
+        print(f"[!] Agent error: {e}")
 
 
 @router.websocket("/ws/excel/{user_id}/{conversation_id}")
@@ -139,7 +139,7 @@ async def excel_websocket_endpoint(
     # ── CONNECT ──
     await manager.connect(websocket)
     create_temp_db(session_id)
-    print(f"🔌 Excel Agent: User #{user_id} connected (session: {session_id})")
+    print(f"[*] Excel Agent: User #{user_id} connected (session: {session_id})")
 
     try:
         while True:
@@ -172,4 +172,4 @@ async def excel_websocket_endpoint(
         manager.disconnect(websocket)
         destroy_temp_db(session_id)
         _excel_agent_sessions.pop(session_id, None)
-        print(f"🔌 Excel Agent: User #{user_id} disconnected. DB cleaned up.")
+        print(f"[*] Excel Agent: User #{user_id} disconnected. DB cleaned up.")
