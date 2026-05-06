@@ -4,7 +4,7 @@ from datetime import date
 from dateutil.relativedelta import relativedelta
 from src.core.db import get_db_connection
 from src.tools.utils.get_yfinance_data import get_yfinance_data
-from src.tools.utils.technical_analysis_utils import calculate_trend, calculate_chart_patterns, calculate_indicators
+from src.tools.utils.technical_analysis_utils import calculate_trend, calculate_indicators
 from ..base import DynamicTool, ToolParam
 
 def makeTool(router):
@@ -126,8 +126,8 @@ def makeTool(router):
                         t_int = calculate_trend(ticker, start_date, end_date)
                         trend_val = "Bullish" if t_int == 1 else "Bearish"
                     
-                    if type in ["chart_patterns", "both"]:
-                         patterns_str = calculate_chart_patterns(ticker, start_date, end_date)
+                    # if type in ["chart_patterns", "both"]:
+                    #      patterns_str = calculate_chart_patterns(ticker, start_date, end_date)
                     
                     # Always calc indicators for completeness if needed, or based on type?
                     # Request implies "tool should calculate both and store". 

@@ -1,27 +1,43 @@
-services:
-  db:
-    image: postgres:16-alpine
-    container_name: postgres_db
-    restart: always
-    environment:
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: ${DB_NAME}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    expose:
-      - "5432"
+# services:
+#     app:
+#         image: kanji070/strend-app:latest
+#         build: .
+#         container_name: fastapi_app
+#         restart: always
+#         env_file:
+#             - .env
+#         # Reminder: For AWS production, you should eventually remove these volume 
+#         # mappings so the container uses the code "baked" into the image.
+#         volumes:
+#             - ./start.sh:/app/start.sh
+#             - ./src:/app/src
+#             - ./main.py:/app/main.py
+#         ports:
+#             - "8000:8000"
 
+# Note: The 'volumes' section for postgres_data has been removed 
+# because your data is now stored in Supabase.
+
+
+services:
   app:
-    build: .
+    # Use your pre-built image from Docker Hub
+    image: kanji070/strend-app:latest
     container_name: fastapi_app
     restart: always
-    depends_on:
-      - db
+    
     env_file:
-      - .env.prod
-    ports:
-      - "80:8000"
+      - .env
+    environment:
+      - TZ=Asia/Kolkata
 
-volumes:
-  postgres_data:
+    # Port mapping (External:Internal)
+    ports:
+      - "8000:8000"
+
+    # Security/Performance optimization
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

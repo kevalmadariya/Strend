@@ -6,6 +6,7 @@ from ..base import ToolParam
 from src.tools.utils.news_scraper import scrape_news_from_groww
 import re
 from typing import Optional
+from src.core.db import get_db_connection
 import json
 
 def makeTool(router):
@@ -15,21 +16,21 @@ def makeTool(router):
     def func(unique_id):
 
         # --- Helper for DB Connection ---
-        def get_db_connection():
-            import os
-            from dotenv import load_dotenv
-            load_dotenv()
+        # def get_db_connection():
+        #     import os
+        #     from dotenv import load_dotenv
+        #     load_dotenv()
             
-            try:
-                return psycopg2.connect(
-                    host=os.getenv("DB_HOST", "127.0.0.1"),
-                    port=os.getenv("DB_PORT", "5433"),
-                    user=os.getenv("DB_USER", "postgres"),
-                    password=os.getenv("DB_PASSWORD", "12345")
-                )
-            except Exception as e:
-                print(f"⚠️ Primary DB connection failed: {e}")
-                raise e
+        #     try:
+        #         return psycopg2.connect(
+        #             host=os.getenv("DB_HOST", "127.0.0.1"),
+        #             port=os.getenv("DB_PORT", "5433"),
+        #             user=os.getenv("DB_USER", "postgres"),
+        #             password=os.getenv("DB_PASSWORD", "12345")
+        #         )
+        #     except Exception as e:
+        #         print(f"⚠️ Primary DB connection failed: {e}")
+        #         raise e
 
         def parse_ago(time_str):
             """Parses '1h ago', '23m ago', '1d ago' into minutes."""

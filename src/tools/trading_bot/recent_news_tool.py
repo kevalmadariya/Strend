@@ -14,24 +14,22 @@ def makeTool(router):
             """
             Fetches recent market news from Pulse. Optional 'domain' to filter (e.g. 'ipo', 'nifty').
             """
-            yield f"Test: {unique_id}"
-            yield f"🌍 [ID: {unique_id}] Fetching recent market news..."
+            yield f"🌍Fetching recent market news...\n"
             if domain:
                 yield f"🔎 Filter: {domain}"
             
             try:
                 # Call the scraper
-                yield "🔄 accessing pulse.zerodha.com..."
                 news_data = await extract_pulse_news(domain)
                 
                 # Check for error
                 if "error" in news_data:
-                    yield f"❌ Error fetching news: {news_data['error']}"
+                    yield f"❌ Error fetching news: {news_data['error']} \n"
                     return
 
                 # Calculate total items
                 total_items = sum(len(items) for items in news_data.values())
-                yield f"✅ Successfully fetched {total_items} news items."
+                yield f"✅ Successfully fetched {total_items} news items.\n"
                 
                 # Yield the final JSON result
                 yield json.dumps({

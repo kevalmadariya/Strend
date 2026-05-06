@@ -11,8 +11,8 @@ DB_CONFIG = {
     "port": int(os.getenv("DB_PORT", 5432)),
     "user": os.getenv("DB_USER", "postgres"),
     "password": os.getenv("DB_PASSWORD", "12345"),
-    "dbname": os.getenv("DB_NAME", "postgres"),
-    "sslmode": os.getenv("DB_SSLMODE", "prefer"),
+    # "dbname": os.getenv("DB_NAME", "strend"),
+    # "sslmode": os.getenv("DB_SSLMODE", "prefer"),
 }
 
 
@@ -23,5 +23,6 @@ def get_db_connection():
     """
     db_url = os.getenv("DATABASE_URL")
     if db_url:
+        print("go inside if")
         return psycopg2.connect(db_url)
     return psycopg2.connect(**DB_CONFIG)

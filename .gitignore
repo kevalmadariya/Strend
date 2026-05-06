@@ -25,3 +25,6 @@ Diagrams
 Documentations
 format.txt
 Diagrams.zip
+
+# Strategy cache (daily Excel exports)
+cache/

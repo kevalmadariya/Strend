@@ -1,18 +1,22 @@
-The request is coming from playit-cli 0.17.1 with ip address 2409:40c1:1016:999c:180:63a6:9492:150b.
+Excel agent:
 
-agent name : from-key-5b96
+usecases : 
+1.comapre two Excel
+2.read multiple Excel and extract specific data from each file
+3.add this two coloumn in Excel
+4.analyze each stocks given in the excel file and do so and so thing add whatever column needed give me excel back.
 
 
-letter:
-Started scraping for method: MACD_Bullish
-Success: Extracted and stored 20 stocks.
-[{"ticker": "SILGO-RE1", "stock_name": "SILGO-RE1", "price": 8.28, "percent_change": 39.86, "volume": 27208.0}, {"ticker": "DBOL", "stock_name": "Dhampur Bio Organics Ltd", "price": 95.76, "percent_change": 20.0, "volume": 1473992.0}, {"ticker": "BAIDFIN", "stock_name": "Baid Finserv Ltd", "price": 11.35, "percent_change": 12.94, "volume": 1649199.0}, {"ticker": "CONSOFINVT", "stock_name": "Consolidated Finvest & Holdings Limited", "price": 167.16, "percent_change": 8.96, "volume": 99033.0}, {"ticker": "KITEX", 
 
-here all response comes as last not kind of streaming effect, add streaming effect,and 
+how working.
 
-first line Started scraping for method: MACD_Bullish
- also come after 10 sec when all reponse come but i want this at first yeild.
+using websocket get data in json format and do not pass this json data to llm
+only pass columns name and one row for example of data to llm.
+now using tool store excel data into some temp (session) db.
+if multiple excel given then make multiple temp db.(excel agent connection close as soon as remove all temp db)
+now based on user query llm think and make query only.
+using another tool run query and get data from temp db.
+then send this data using websocket yield { yield json.dumps({"status": "success", "data": final_results}) }
 
-convert it like all yeild comes when they hited and streming.
-
+based on query if new data needed for stock then call tool (fetch_stock_data). 
 

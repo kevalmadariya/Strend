@@ -1,6 +1,7 @@
 import psycopg2
 import yfinance as yf
 from datetime import date
+from src.core.db import get_db_connection
 
 def normalize_ticker(ticker: str) -> str:
     if "." not in ticker:
@@ -55,18 +56,18 @@ def get_yfinance_data(ticker_symbol):
         from dotenv import load_dotenv
         load_dotenv()
         
-        db_config = {
-            "host": os.getenv("DB_HOST", "127.0.0.1"),
-            "port": os.getenv("DB_PORT", "5433"),
-            "user": os.getenv("DB_USER", "postgres"),
-            "password": os.getenv("DB_PASSWORD", "12345"),
-        }
+        # db_config = {
+        #     "host": os.getenv("DB_HOST", "127.0.0.1"),
+        #     "port": os.getenv("DB_PORT", "5433"),
+        #     "user": os.getenv("DB_USER", "postgres"),
+        #     "password": os.getenv("DB_PASSWORD", "12345"),
+        # }
 
         conn = None
         cur = None
 
         try:
-            conn = psycopg2.connect(**db_config)
+            conn = get_db_connection()
             conn.autocommit = False
             cur = conn.cursor()
 

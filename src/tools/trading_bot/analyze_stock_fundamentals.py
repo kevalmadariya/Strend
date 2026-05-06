@@ -3,6 +3,7 @@ from src.tools.utils.calculate_fundametal_score import calculate_fundamental_sco
 from src.tools.utils.fetch_and_store_fundametals import fetch_and_store_fundamentals
 from ..base import DynamicTool
 from ..base import ToolParam
+from src.tools.utils.get_yfinance_data import get_yfinance_data
 import json
 
 def makeTool(router):
@@ -29,7 +30,7 @@ def makeTool(router):
 
             for ticker in tickers:
                 try:
-                    print(f"📊 Analyzing Fundamentals for: {ticker} (Context: {unique_id})")
+                    print(f"📊 Analyzing Fundamentals for: {ticker}")
 
                     # -------------------------
                     # 0. Resolve stock_id
@@ -41,13 +42,18 @@ def makeTool(router):
                     stock_row = cur.fetchone()
 
                     if not stock_row:
-                        print(f"❌ Stock {ticker} not found in DB.")
-                        results_summary.append(
-                            {"ticker": ticker, "status": "Error: Stock not found"}
-                        )
-                        continue
-
-                    stock_id = stock_row[0] if isinstance(stock_row, (tuple, list)) else stock_row
+                        try:
+                            get_yfinance_data(ticker)
+                            cur.execute(
+                                "SELECT stock_id FROM stock WHERE ticker = %s",
+                                (ticker,)
+                            )
+                            stock_id = cur.fetchone()[0]
+                        except Exception as e:
+                            print(f"❌ Stock insert failed for {ticker}: {e}")
+                            continue 
+                    else:
+                        stock_id = stock_row[0] if isinstance(stock_row, (tuple, list)) else stock_row
 
                     # -------------------------
                     # 1. Get latest fundamental_analysis
@@ -67,7 +73,7 @@ def makeTool(router):
                     row = cur.fetchone()
 
                     # -------------------------
-                    # 2. If missing, fetch fundamentals and retry
+                    # 2. If missing, fetch fundamentals and again
                     # -------------------------
                     if not row:
                         print(f"🔍 Data missing for {ticker}. Calling get_fundamentals...")
