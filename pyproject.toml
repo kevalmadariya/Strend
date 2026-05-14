@@ -20,4 +20,5 @@ dependencies = [
     "pandas-ta>=0.3.14b",
     "numpy>=1.26.0",
     "openpyxl>=3.1.0",
+    "langchain-nvidia-ai-endpoints>=1.2.1",
 ]

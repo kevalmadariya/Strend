@@ -184,14 +184,20 @@ def save_to_excel(data: list[dict], slot_label: str) -> str:
         "Ticker",
         "Price",
         "todayHigh",
+        "todayLow",
         "52WeekHigh",
         "Volume",
         "ROC_Today", 
         "ROC (5m, 12p)",
-        "News Headlines",
-        "News Time",
-        "News URL",
+        "Diff of ROC"
     ]
+    #RECENT_NEWS == True then only add news columns
+    if RECENT_NEWS == True:
+        col_headers += [
+            "News Headlines",
+            "News Time",
+            "News URL",
+        ]
     ws.append(col_headers)
 
     header_font = Font(bold=True, color="FFFFFF", size=11)
@@ -202,25 +208,68 @@ def save_to_excel(data: list[dict], slot_label: str) -> str:
         cell.alignment = Alignment(horizontal="center")
 
     # --- Data rows ---
-    for stock in data:
-        news_list = stock.get("news", [])
-        news_headlines = "\n".join(n.get("news", "") for n in news_list)
-        news_times = "\n".join(n.get("time_str", "") for n in news_list)
-        news_urls = "\n".join(n.get("url", "") for n in news_list)
 
-        ws.append([
-            stock.get("name", ""),
-            stock.get("ticker", ""),
-            stock.get("price", 0),
-            stock.get("todayHigh", 0),
-            stock.get("52weekHigh", 0),
-            stock.get("volume", 0),
-            round(stock.get("today_roc", 0), 2),
-            round(stock.get("roc", 0), 2),
-            news_headlines,
-            news_times,
-            news_urls,
-        ])
+    #sort data by diff of roc in descending order
+    if '1' in slot_label or '2' in slot_label:
+        data.sort(key=lambda x: x["today_roc"], reverse=True)
+    else:
+        data.sort(key=lambda x: x["diff_roc_today_and_5d"], reverse=True)
+
+    if RECENT_NEWS == True:
+        for stock in data:
+            news_list = stock.get("news", [])
+            news_headlines = "\n".join(n.get("news", "") for n in news_list)
+            news_times = "\n".join(n.get("time_str", "") for n in news_list)
+            news_urls = "\n".join(n.get("url", "") for n in news_list)
+
+            ws.append([
+                stock.get("name", ""),
+                stock.get("ticker", ""),
+                stock.get("price", 0),
+                stock.get("todayHigh", 0),
+                stock.get("todayLow", 0),
+                stock.get("52weekHigh", 0),
+                stock.get("volume", 0),
+                round(stock.get("today_roc", 0), 2),
+                round(stock.get("roc", 0), 2),
+                round(stock.get("diff_roc_today_and_5d", 0), 2),
+                news_headlines,
+                news_times,
+                news_urls,
+            ])
+    else:
+        for stock in data:
+            ws.append([
+                stock.get("name", ""),
+                stock.get("ticker", ""),
+                stock.get("price", 0),
+                stock.get("todayHigh", 0),
+                stock.get("todayLow", 0),
+                stock.get("52weekHigh", 0),
+                stock.get("volume", 0),
+                round(stock.get("today_roc", 0), 2),
+                round(stock.get("roc", 0), 2),
+                round(stock.get("diff_roc_today_and_5d", 0), 2),
+            ])
+    # for stock in data:
+    #     news_list = stock.get("news", [])
+    #     news_headlines = "\n".join(n.get("news", "") for n in news_list)
+    #     news_times = "\n".join(n.get("time_str", "") for n in news_list)
+    #     news_urls = "\n".join(n.get("url", "") for n in news_list)
+
+    #     ws.append([
+    #         stock.get("name", ""),
+    #         stock.get("ticker", ""),
+    #         stock.get("price", 0),
+    #         stock.get("todayHigh", 0),
+    #         stock.get("52weekHigh", 0),
+    #         stock.get("volume", 0),
+    #         round(stock.get("today_roc", 0), 2),
+    #         round(stock.get("roc", 0), 2),
+    #         news_headlines,
+    #         news_times,
+    #         news_urls,
+    #     ])
 
     # --- Auto-fit column widths ---
     for col in ws.columns:
@@ -290,7 +339,7 @@ async def run_strategy_job(slot_index: int, slot_label: str):
         return
 
     logger.info(f"📄 Chartink returned {len(all_rows)} rows | Headers: {headers}")
-    print(f"\n--- ALL EXTRACTED STOCKS DATA ---\n{all_rows}\n{'='*30}\n")
+    # print(f"\n--- ALL EXTRACTED STOCKS DATA ---\n{all_rows}\n{'='*30}\n")
 
     # -----------------------------------------------------------------
     # Step 2: Identify column indices
@@ -343,7 +392,7 @@ async def run_strategy_job(slot_index: int, slot_label: str):
         f"🔍 Filter result: {len(filtered_stocks)}/{len(all_rows)} stocks passed "
         f"(price≥{MIN_PRICE}, vol≥{min_volume:,.0f})"
     )
-    print(f"\n--- FILTERED STOCKS DATA ---\n{filtered_stocks}\n{'='*30}\n")
+    # print(f"\n--- FILTERED STOCKS DATA ---\n{filtered_stocks}\n{'='*30}\n")
 
     if not filtered_stocks:
         logger.info("📭 No stocks passed filters. Job finished.")
@@ -391,15 +440,18 @@ async def run_strategy_job(slot_index: int, slot_label: str):
         fifty_two_week_high = s.info.get('fiftyTwoWeekHigh')
         stock["52weekHigh"] = max(fifty_two_week_high, stock["price"])
 
-        #high
+        #high and low
         hist = s.history(period="1d")
     
         if not hist.empty:
             today_high = hist['High'].iloc[0]
+            today_low = hist['Low'].iloc[0]
         else:
             today_high = None
+            today_low = None
         
         stock["todayHigh"] = today_high
+        stock["todayLow"] = today_low
 
         # Calculate ROC (5m, 12 periods)
         try:
@@ -424,6 +476,8 @@ async def run_strategy_job(slot_index: int, slot_label: str):
             period = max(1, int(minutes_diff))
             today_roc_value = await asyncio.to_thread(calculate_roc, stock["ticker"], period=period, interval="5m")
             stock["today_roc"] = today_roc_value
+
+            stock["diff_roc_today_and_5d"] = today_roc_value - roc_value
         except Exception as e:
             logger.warning(f"⚠️ ROC calculation failed for {stock['ticker']}: {e}")
             stock["roc"] = 0.0

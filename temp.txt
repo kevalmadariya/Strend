@@ -1,22 +1,294 @@
-Excel agent:
+"""
+Utility function for stock data analysis
+=========================================
+Fetches historical price data for tickers and calculates 
+high price comparisons and gains.
+"""
 
-usecases : 
-1.comapre two Excel
-2.read multiple Excel and extract specific data from each file
-3.add this two coloumn in Excel
-4.analyze each stocks given in the excel file and do so and so thing add whatever column needed give me excel back.
+import json
+from datetime import datetime, timedelta
+import yfinance as yf
 
 
+def analyze_stock_data(
+    json_data, 
+    date=None,
+    ticker_column_names=None,
+    high_column_names=None,
+    low_column_names=None,
+    price_column_names=None,
+    add_exchange_suffix=True,
+    exchange_suffix='.NS'
+):
+    """
+    Analyze stock data by fetching historical price data and computing comparisons.
+    
+    Args:
+        json_data (str or dict): JSON string with format {"file": [{...}, ...]} 
+                                or table name for SQLite lookup
+        date (str, optional): Date in YYYY-MM-DD format. Defaults to current date.
+        ticker_column_names (list, optional): List of possible column names for ticker/symbol.
+                                             Defaults to ["ticker", "Ticker", "symbol", "Symbol"]
+        high_column_names (list, optional): List of possible column names for high price.
+                                           Defaults to ["today_high", "Today_High", "todayhigh", "high", "High"]
+        low_column_names (list, optional): List of possible column names for low price.
+                                          Defaults to ["today_low", "Today_Low", "todaylow", "low", "Low"]
+        price_column_names (list, optional): List of possible column names for price.
+                                            Defaults to ["price", "Price", "close", "Close"]
+        add_exchange_suffix (bool, optional): Whether to add exchange suffix to tickers. Defaults to True.
+        exchange_suffix (str, optional): Exchange suffix to add. Defaults to '.NS'
+    
+    Returns:
+        dict: Result dictionary with format:
+            {"status": "success", "data": {"file": [...]}}
+            or
+            {"status": "error", "error": "error message"}
+    """
+    
+    # Set default column names
+    if ticker_column_names is None:
+        ticker_column_names = ["ticker", "Ticker", "symbol", "Symbol"]
+    if high_column_names is None:
+        high_column_names = ["today_high", "Today_High", "todayhigh", "high", "High"]
+    if low_column_names is None:
+        low_column_names = ["today_low", "Today_Low", "todaylow", "low", "Low"]
+    if price_column_names is None:
+        price_column_names = ["price", "Price", "close", "Close"]
+    
+    try:
+        # Parse the input data
+        if isinstance(json_data, str) and not json_data.strip().startswith('{') and not json_data.strip().startswith('['):
+            # This is a table name for SQLite - requires connection
+            # Note: This part needs database connection, so it's handled in the tool version
+            return {
+                "status": "error",
+                "error": "Direct table name lookup not supported in util function. Use parsed data instead."
+            }
+        else:
+            data = json.loads(json_data) if isinstance(json_data, str) else json_data
+        
+        # Parse Excel JSON format
+        columns, rows = parse_excel_json(data)
+        
+        # Parse date
+        if date:
+            try:
+                date_str = str(date).split('T')[0].split()[0]
+                target_date = datetime.strptime(date_str, "%Y-%m-%d")
+            except Exception:
+                return {
+                    "status": "error",
+                    "error": f"Invalid date format: {date}. Use YYYY-MM-DD format."
+                }
+        else:
+            target_date = datetime.now()
+        
+        # Map each row by ticker
+        ticker_data_map = {}
+        for row in rows:
+            ticker = _find_column_value(row, ticker_column_names)
+            if ticker:
+                ticker_data_map[ticker] = {key: value for key, value in row.items()}
+        
+        if not ticker_data_map:
+            return {
+                "status": "error",
+                "error": "No ticker/symbol column found in the data"
+            }
+        
+        # Set date range for 1-day timeframe
+        start_dt = target_date
+        end_dt = target_date
+        
+        # Create result list
+        result_rows = []
+        
+        # Process each ticker
+        for idx, row in enumerate(rows):
+            ticker = _find_column_value(row, ticker_column_names)
+            
+            if not ticker:
+                # If no ticker found, keep row as is with None values
+                result_row = row.copy()
+                result_row["actual_high"] = None
+                result_row["is_high"] = None
+                result_row["actual_low"] = None
+                result_row["is_low"] = None
+                result_row["gain"] = None
+                result_row["reverse_gain"] = None
+                result_rows.append(result_row)
+                continue
+            
+            try:
+                # Prepare ticker symbol
+                ticker_symbol = ticker
+                if add_exchange_suffix and not ticker_symbol.endswith('.NS') and not ticker_symbol.endswith('.BO'):
+                    ticker_symbol += exchange_suffix
+                
+                # Download stock data
+                stocks = yf.download(
+                    ticker_symbol,
+                    start=start_dt.strftime("%Y-%m-%d"),
+                    end=(end_dt + timedelta(days=1)).strftime("%Y-%m-%d"),
+                    interval='1d',
+                    group_by='ticker',
+                    auto_adjust=False,
+                    progress=False
+                )
+                
+                # Extract actual high and low price
+                actual_high = None
+                actual_low = None
+                if not stocks.empty:
+                    if 'High' in stocks.columns:
+                        actual_high = float(stocks['High'].iloc[0])
+                    else:
+                        try:
+                            actual_high = float(stocks[(ticker_symbol, 'High')].iloc[0])
+                        except:
+                            actual_high = None
+                    
+                    if 'Low' in stocks.columns:
+                        actual_low = float(stocks['Low'].iloc[0])
+                    else:
+                        try:
+                            actual_low = float(stocks[(ticker_symbol, 'Low')].iloc[0])
+                        except:
+                            actual_low = None
+                
+                # Create result row
+                result_row = row.copy()
+                result_row["actual_high"] = actual_high
+                result_row["actual_low"] = actual_low
+                
+                # Calculate is_high
+                today_high = _find_column_value(row, high_column_names)
+                if today_high is not None and actual_high is not None:
+                    try:
+                        result_row["is_high"] = 1 if float(today_high) < actual_high else 0
+                    except (ValueError, TypeError):
+                        result_row["is_high"] = None
+                else:
+                    result_row["is_high"] = None
+                
+                # Calculate is_low
+                today_low = _find_column_value(row, low_column_names)
+                if today_low is not None and actual_low is not None:
+                    try:
+                        result_row["is_low"] = 1 if float(today_low) > actual_low else 0
+                    except (ValueError, TypeError):
+                        result_row["is_low"] = None
+                else:
+                    result_row["is_low"] = None
+                
+                # Extract price
+                price = _find_column_value(row, price_column_names)
+                
+                # Calculate gain = actual_high - price
+                if actual_high is not None and price is not None:
+                    try:
+                        if result_row["is_high"] == 1:
+                            result_row["gain"] = round(actual_high - float(price), 2)
+                        else:
+                            result_row["gain"] = 0
+                    except (ValueError, TypeError):
+                        result_row["gain"] = 0
+                else:
+                    result_row["gain"] = 0
+                
+                # Calculate reverse_gain = price - actual_low
+                if actual_low is not None and price is not None:
+                    try:
+                        if result_row["is_low"] == 1:
+                            result_row["reverse_gain"] = round(float(price) - actual_low, 2)
+                        else:
+                            result_row["reverse_gain"] = 0
+                    except (ValueError, TypeError):
+                        result_row["reverse_gain"] = 0
+                else:
+                    result_row["reverse_gain"] = 0
+                
+                result_rows.append(result_row)
+                
+                # Sort by roc_diff in descending order if column exists
+                if "roc_diff" in result_rows[0] if result_rows else False:
+                    result_rows.sort(key=lambda x: x.get("roc_diff", 0) or 0, reverse=True)
+                
+            except Exception as e:
+                # If stock fetch fails, add row with error indication
+                result_row = row.copy()
+                result_row["actual_high"] = None
+                result_row["is_high"] = None
+                result_row["actual_low"] = None
+                result_row["is_low"] = None
+                result_row["gain"] = 0
+                result_row["reverse_gain"] = 0
+                result_row["error"] = f"Failed to fetch data for {ticker}: {str(e)}"
+                result_rows.append(result_row)
+        
+        # Return success result
+        return {
+            "status": "success",
+            "data": {
+                "file": result_rows,
+            }
+        }
+        
+    except json.JSONDecodeError as e:
+        return {
+            "status": "error",
+            "error": f"Invalid JSON format: {str(e)}"
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": f"Analysis failed: {str(e)}"
+        }
 
-how working.
 
-using websocket get data in json format and do not pass this json data to llm
-only pass columns name and one row for example of data to llm.
-now using tool store excel data into some temp (session) db.
-if multiple excel given then make multiple temp db.(excel agent connection close as soon as remove all temp db)
-now based on user query llm think and make query only.
-using another tool run query and get data from temp db.
-then send this data using websocket yield { yield json.dumps({"status": "success", "data": final_results}) }
+def _find_column_value(row, column_names):
+    """
+    Helper function to find a value in a row by checking multiple possible column names.
+    
+    Args:
+        row (dict): Row data
+        column_names (list): List of possible column names to check
+    
+    Returns:
+        The value if found, None otherwise
+    """
+    for col_name in column_names:
+        value = row.get(col_name)
+        if value is not None:
+            return value
+    return None
 
-based on query if new data needed for stock then call tool (fetch_stock_data). 
 
+def parse_excel_json(data):
+    """
+    Parse Excel JSON data into columns and rows.
+    
+    Args:
+        data (dict): Data dictionary with 'file' key containing list of row dictionaries
+    
+    Returns:
+        tuple: (columns, rows) where columns is a list of column names and rows is a list of dictionaries
+    """
+    if isinstance(data, dict) and "file" in data:
+        rows = data["file"]
+        if rows and isinstance(rows[0], dict):
+            columns = list(rows[0].keys())
+            return columns, rows
+    
+    # If data is directly a list
+    if isinstance(data, list):
+        rows = data
+        if rows and isinstance(rows[0], dict):
+            columns = list(rows[0].keys())
+            return columns, rows
+    
+    # Fallback
+    return [], []
+
+
+all_excel_analyze tool:
