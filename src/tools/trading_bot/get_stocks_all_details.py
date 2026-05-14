@@ -30,7 +30,7 @@ def makeTool(router):
                         all_tickers.add(t)
 
             if not all_tickers:
-                yield "⚠️ No tickers provided.\n"
+                yield "[!] No tickers provided.\n"
                 return
 
             tf_map = {
@@ -71,7 +71,7 @@ def makeTool(router):
             # 🔹 Intraday restriction
             if interval in ['1m', '2m', '15m']:
                 if (datetime.now() - start_dt).days > 60:
-                    yield "⚠️ Intraday data only available for last ~60 days.\n"
+                    yield "[!] Intraday data only available for last ~60 days.\n"
                     return
 
             results = {}
@@ -79,7 +79,7 @@ def makeTool(router):
             for ticker in all_tickers:
                 ticker_symbol = ticker if "." in ticker else f"{ticker}.NS"
 
-                yield f"⏳ Fetching data for {ticker_symbol}...for this timeframe {interval}\n"
+                yield f"[..] Fetching data for {ticker_symbol}...for this timeframe {interval}\n"
 
                 try:
                     stocks = yf.download(
@@ -96,7 +96,7 @@ def makeTool(router):
                     print(stocks)
                     print(stocks.columns)
                     if stocks.empty:
-                        yield f"⚠️ No data found for {ticker_symbol}\n"
+                        yield f"[!] No data found for {ticker_symbol}\n"
                         results[ticker_symbol] = []
                         continue
 
@@ -127,10 +127,10 @@ def makeTool(router):
 
                     results[ticker_symbol] = stocks.to_dict(orient='records')
 
-                    yield f"✅ Done: {ticker_symbol} ({len(stocks)} rows)\n"
+                    yield f"[+] Done: {ticker_symbol} ({len(stocks)} rows)\n"
 
                 except Exception as e:
-                    yield f"❌ Error for {ticker_symbol}: {e}\n"
+                    yield f"[!] Error for {ticker_symbol}: {e}\n"
 
             yield json.dumps({
                 "status": "success",

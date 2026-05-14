@@ -26,15 +26,19 @@ def makeTool(router):
                 # Validate first
                 is_valid, err = validate_query(query)
                 if not is_valid:
-                    return json.dumps({"status": "error", "error": f"Query blocked: {err}"})
+                    yield json.dumps({"status": "error", "error": f"Query blocked: {err}"})
+                    return
 
                 # Execute
                 conn = get_connection(unique_id)
                 result = execute_auto_query(conn, query)
-                return format_result_as_json(result)
+                yield json.dumps({
+                    "status" : "success",
+                    "data" : result
+                })
 
             except Exception as e:
-                return json.dumps({"status": "error", "error": str(e)})
+                yield json.dumps({"status": "error", "error": str(e)})
 
         return DynamicTool(
             name="execute_query",

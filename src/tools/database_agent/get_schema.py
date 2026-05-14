@@ -1,7 +1,8 @@
+
 """
 Tool: get_schema
 =================
-Thin wrapper — delegates to schema_ops util.
+Thin wrapper -- delegates to schema_ops util.
 Returns table structure (columns, types) as JSON.
 """
 
@@ -14,17 +15,17 @@ def makeTool(router):
 
     def func(unique_id):
 
-        async def get_schema(table_name: str = "excel_data"):
+        async def get_schema(table_name: str = "all"):
             """
-            Get the schema (columns and types) of a table in the temp database.
+            Get the schema (columns and types) of a table in the PostgreSQL database.
             """
-            from src.utils.excel_agent.schema_ops import (
+            from src.utils.database_agent.schema_ops import (
                 get_table_schema, get_all_tables, get_row_count
             )
-            from src.core.sqlite_manager import get_connection
+            from src.core.db import get_db_connection
 
             try:
-                conn = get_connection(unique_id)
+                conn = get_db_connection()
 
                 # If table_name is empty or "all", return all tables
                 if not table_name or table_name.lower() == "all":
@@ -35,39 +36,34 @@ def makeTool(router):
                             "columns": get_table_schema(conn, tbl),
                             "row_count": get_row_count(conn, tbl),
                         }
-                    yield json.dumps({
-                        "status": "success",
-                        "data": {
-                            "tables": result
-                        }
-                    })
-                    return
+                    conn.close()
+                    return json.dumps({"status": "success", "tables": result})
 
                 # Get schema for specific table
                 schema = get_table_schema(conn, table_name)
                 row_count = get_row_count(conn, table_name)
+                conn.close()
 
-                yield json.dumps({
+                return json.dumps({
                     "status": "success",
-                    "data": {
-                        "table": table_name,
-                        "columns": schema,
-                        "row_count": row_count,
-                    }
+                    "table": table_name,
+                    "columns": schema,
+                    "row_count": row_count,
                 })
 
             except Exception as e:
-                yield json.dumps({"status": "error", "error": str(e)})
+                return json.dumps({"status": "error", "error": str(e)})
 
         return DynamicTool(
             name="get_schema",
-            description="Get the database schema showing all columns, their types, and row counts",
+            description="Get the database schema showing all columns, their types, and row counts from the PostgreSQL database",
+            trigger="Get database schema, show columns, show table structure, describe table, what columns exist",
             function=get_schema,
             parameters=[
                 ToolParam(
                     name="table_name",
                     type="string",
-                    description="Table name to inspect (default: 'excel_data'). Use 'all' to see all tables.",
+                    description="Table name to inspect (default: 'all' to see all tables).",
                     required=False,
                 ),
             ],

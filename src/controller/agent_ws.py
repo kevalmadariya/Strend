@@ -151,11 +151,14 @@ async def websocket_endpoint(
             if _has_session(conversation_id):
                 try:
                     _conn = _get_conn(conversation_id)
-                    from src.utils.excel_agent.schema_ops import get_all_tables
+                    from src.utils.excel_agent.schema_ops import get_all_tables, get_row_count
                     _tables = get_all_tables(_conn)
                     if _tables:
                         table_name = _tables[0]
-                        cursor = _conn.execute(f'SELECT * FROM "{table_name}"')
+                        # Limit to 500 rows for performance
+                        _MAX_TABLE_ROWS = 500
+                        total_rows = get_row_count(_conn, table_name)
+                        cursor = _conn.execute(f'SELECT * FROM "{table_name}" LIMIT {_MAX_TABLE_ROWS}')
                         columns = [desc[0] for desc in cursor.description]
                         rows = [dict(zip(columns, row)) for row in cursor.fetchall()]
                         await websocket.send_text(json.dumps({
@@ -165,8 +168,10 @@ async def websocket_endpoint(
                             "columns": columns,
                             "data": rows,
                             "row_count": len(rows),
+                            "total_rows": total_rows,
+                            "truncated": total_rows > _MAX_TABLE_ROWS,
                         }, default=str, ensure_ascii=False))
-                        print(f"[+] Sent updated table data ({len(rows)} rows, {len(columns)} cols) to frontend")
+                        print(f"[+] Sent table data ({len(rows)}/{total_rows} rows, {len(columns)} cols) to frontend")
                 except Exception as e:
                     print(f"[!] Failed to send table data: {e}")
 

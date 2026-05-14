@@ -1,11 +1,12 @@
+
 """
 Tool: add_computed_column
 ==========================
-Thin wrapper — delegates to query_builder + validate_query + query_executor utils.
+Thin wrapper -- delegates to query_builder + validate_query + query_executor utils.
 Adds a new column to the table computed from existing columns via a SQL expression.
 
 KEY DESIGN: The LLM only generates a SQL EXPRESSION (e.g., "CASE WHEN x > 0 THEN 1 ELSE 0 END").
-SQLite then applies this expression to ALL rows in a single UPDATE statement.
+PostgreSQL then applies this expression to ALL rows in a single UPDATE statement.
 """
 
 import json
@@ -22,21 +23,22 @@ def makeTool(router):
             Add a new computed column to the table using an LLM-generated SQL expression.
             The LLM generates ONLY the expression, not per-row data.
             """
-            from src.utils.excel_agent.schema_ops import (
+            from src.utils.database_agent.schema_ops import (
                 get_table_schema, get_all_tables, get_sample_rows
             )
-            from src.utils.excel_agent.query_builder import build_computed_column_expression
-            from src.utils.excel_agent.validate_query import validate_query
-            from src.utils.excel_agent.query_executor import execute_multi_query
-            from src.core.sqlite_manager import get_connection
+            from src.utils.database_agent.query_builder import build_computed_column_expression
+            from src.utils.database_agent.validate_query import validate_query
+            from src.utils.database_agent.query_executor import execute_multi_query
+            from src.core.db import get_db_connection
             from langchain_groq import ChatGroq
 
             try:
-                conn = get_connection(unique_id)
+                conn = get_db_connection()
 
                 tables = get_all_tables(conn)
                 if not tables:
-                    return json.dumps({"status": "error", "error": "No tables found. Upload data first."})
+                    conn.close()
+                    return json.dumps({"status": "error", "error": "No tables found."})
 
                 table_name = tables[0]
                 schema = get_table_schema(conn, table_name)
@@ -64,6 +66,7 @@ def makeTool(router):
                 for sql in sqls:
                     is_valid, err = validate_query(sql)
                     if not is_valid:
+                        conn.close()
                         return json.dumps({
                             "status": "error",
                             "error": f"Generated SQL blocked: {err}",
@@ -75,6 +78,7 @@ def makeTool(router):
                 exec_result["column_name"] = column_name
                 exec_result["formula"] = formula
                 exec_result["expression"] = expression
+                conn.close()
                 return json.dumps(exec_result)
 
             except Exception as e:

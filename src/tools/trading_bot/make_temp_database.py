@@ -51,7 +51,7 @@ def makeTool(router):
 
         return DynamicTool(
             name="make_temp_database",
-            description="Load Excel/CSV JSON data into a temporary SQLite database table",
+            description="Load Excel/CSV JSON data into a temporary SQLite database table. IMPORTANT: Do NOT use this tool if the user explicitly asks to 'analyze excel' (use the analyze_excel tool instead).",
             function=make_temp_database,
             parameters=[
                 ToolParam(

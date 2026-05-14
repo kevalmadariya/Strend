@@ -4,6 +4,10 @@ Tool: make_sql_query
 Thin wrapper — delegates ALL logic to utils.
 Takes a natural language query, generates SQL via LLM, validates, executes, returns JSON.
 This is the PRIMARY workhorse tool for the Excel Agent.
+
+KEY DESIGN: The LLM generates SHORT SQL queries (SELECT, aggregation, filtering).
+It NEVER generates per-row UPDATE statements. For computed columns, use add_computed_column.
+For storing LLM analysis, use store_llm_result.
 """
 
 import json
@@ -24,7 +28,6 @@ def makeTool(router):
             from src.utils.excel_agent.validate_query import validate_query
             from src.utils.excel_agent.query_executor import execute_auto_query, format_result_as_json
             from src.core.sqlite_manager import get_connection
-            from langchain_groq import ChatGroq
 
             try:
                 conn = get_connection(unique_id)
@@ -32,34 +35,52 @@ def makeTool(router):
                 # Get all tables to provide context
                 tables = get_all_tables(conn)
                 if not tables:
-                    return json.dumps({"status": "error", "error": "No tables found in database. Upload data first."})
+                    yield json.dumps({"status": "error", "error": "No tables found in database. Upload data first."})
+                    return
 
                 # Default to first table
                 table_name = tables[0]
                 schema = get_table_schema(conn, table_name)
-                samples = get_sample_rows(conn, table_name)
+                samples = get_sample_rows(conn, table_name, limit=3)
 
-                # Build SQL via LLM (LLM injected here — Dependency Inversion)
-                llm = ChatGroq(model_name="llama-3.3-70b-versatile", temperature=0)
+                # Build SQL via LLM (use ChatNVIDIA with fallback to ChatGroq)
+                import os
+                api_key = os.getenv("NVIDIA_API_KEY") or "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"
+                try:
+                    from langchain_nvidia_ai_endpoints import ChatNVIDIA
+                    llm = ChatNVIDIA(
+                        model="meta/llama-3.3-70b-instruct",
+                        api_key=api_key,
+                        temperature=0,
+                        max_tokens=512,  # Short queries only — no per-row data
+                    )
+                except Exception:
+                    from langchain_groq import ChatGroq
+                    llm = ChatGroq(model_name="llama-3.3-70b-versatile", temperature=0)
+
                 sql = build_sql_from_query(llm, user_query, schema, samples, table_name)
 
-                print(f"🔍 Generated SQL: {sql}")
+                print(f"[+] Generated SQL: {sql}")
 
                 # Validate
                 is_valid, err = validate_query(sql)
                 if not is_valid:
-                    return json.dumps({"status": "error", "error": f"Unsafe query blocked: {err}", "generated_sql": sql})
+                    yield json.dumps({"status": "error", "error": f"Unsafe query blocked: {err}", "generated_sql": sql})
+                    return
 
                 # Execute
                 result = execute_auto_query(conn, sql)
-                return format_result_as_json(result)
+                yield json.dumps({
+                    "status" : "success",
+                    "data" : result
+                })
 
             except Exception as e:
-                return json.dumps({"status": "error", "error": str(e)})
+                yield json.dumps({"status": "error", "error": str(e)})
 
         return DynamicTool(
             name="make_sql_query",
-            description="Generate and execute SQL query from a natural language question about the data",
+            description="Generate and execute a SHORT SQL query from a natural language question about the data. For adding computed columns, use add_computed_column instead. For storing LLM analysis results, use store_llm_result instead.",
             function=make_sql_query,
             parameters=[
                 ToolParam(

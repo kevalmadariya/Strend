@@ -1,7 +1,8 @@
+
 """
 Query Validator
 ================
-Single Responsibility: Validate SQL queries for safety before execution.
+Single Responsibility: Validate SQL queries for safety before execution on PostgreSQL.
 Whitelist allowed operations, blacklist dangerous patterns.
 Does NOT execute queries — that's query_executor's job.
 """
@@ -23,18 +24,20 @@ _ALLOWED_PREFIXES = (
 # Dangerous patterns that should NEVER be allowed
 _BLACKLIST_PATTERNS = [
     r"\bDROP\s+DATABASE\b",
+    r"\bDROP\s+SCHEMA\b",
     r"\bDROP\s+TABLE\b",
     r"\bDROP\s+INDEX\b",
-    r"\bATTACH\b",
-    r"\bDETACH\b",
     r"\bCREATE\s+TRIGGER\b",
     r"\bCREATE\s+INDEX\b",
     r"\bVACUUM\b",
     r"\bREINDEX\b",
     r"\bANALYZE\b",
-    r"\bEXPLAIN\b",
-    # Block PRAGMA except table_info (which we use internally)
-    r"\bPRAGMA\s+(?!table_info\b)\w+",
+    r"\bCOMMENT\s+ON\b",
+    r"\bGRANT\b",
+    r"\bREVOKE\b",
+    r"\bSET\s+\w+",
+    r"\bCOPY\b",
+    r"\bDO\b\s+",
 ]
 
 # Compiled blacklist for performance
@@ -43,11 +46,11 @@ _COMPILED_BLACKLIST = [re.compile(p, re.IGNORECASE) for p in _BLACKLIST_PATTERNS
 
 def validate_query(sql: str) -> Tuple[bool, Optional[str]]:
     """
-    Validate an SQL query for safety.
-    
+    Validate an SQL query for safety on PostgreSQL.
+
     Args:
         sql: The SQL string to validate
-        
+
     Returns:
         (True, None) if safe
         (False, "error reason") if dangerous
@@ -91,13 +94,13 @@ def validate_query(sql: str) -> Tuple[bool, Optional[str]]:
 def sanitize_table_name(name: str) -> str:
     """
     Ensure a table name contains only safe characters.
-    
+
     Args:
         name: Raw table name
-        
+
     Returns:
         Sanitized table name (alphanumeric + underscores only)
-        
+
     Raises:
         ValueError: If name is empty after sanitization
     """
@@ -117,7 +120,7 @@ def sanitize_table_name(name: str) -> str:
 def validate_column_name(name: str) -> Tuple[bool, Optional[str]]:
     """
     Validate a column name for safety.
-    
+
     Returns:
         (True, None) if valid
         (False, "error reason") if invalid
