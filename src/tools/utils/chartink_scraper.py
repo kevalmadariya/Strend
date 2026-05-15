@@ -56,21 +56,25 @@ async def fetch_chartink_data(
 
         if query_text:
             print(f"📝 Typing query into textarea: {query_text}")
-            textarea_selector = "textarea[name='comment']"
-            await page.fill(textarea_selector, query_text)
+            await page.locator("textarea").first.fill(query_text)
             await take_shot("02_query_filled")
+            
+            #click enter
+            await page.keyboard.press("Enter")
+            await page.wait_for_timeout(13000)
+            await take_shot("002_enter_pressed")
+            
+            # print("⚙️ Clicking 'Generate' button")
+            # generate_btn_selector = "button:has-text('Generate')"
+            # await page.click(generate_btn_selector)
+            # await page.wait_for_timeout(1000)
+            # await take_shot("03_after_generate")
 
-            print("⚙️ Clicking 'Generate' button")
-            generate_btn_selector = "button:has-text('Generate')"
-            await page.click(generate_btn_selector)
-            await page.wait_for_timeout(1000)
-            await take_shot("03_after_generate")
-
-            print("▶️ Clicking 'Run Scan' button")
-            run_scan_selector = "div[title='Click to run scan']"
-            await page.click(run_scan_selector)
-            await page.wait_for_timeout(12000)
-            await take_shot("04_after_run_scan")
+            # print("▶️ Clicking 'Run Scan' button")
+            # run_scan_selector = "div[title='Click to run scan']"
+            # await page.click(run_scan_selector)
+            # await page.wait_for_timeout(12000)
+            # await take_shot("04_after_run_scan")
 
         # ── Set rows-per-page so we get 20 * total_pages entries ──────────────
         entries_to_show = 20 * total_pages

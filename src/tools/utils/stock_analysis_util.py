@@ -125,6 +125,8 @@ def analyze_stock_data(
                 result_row = row.copy()
                 result_row["actual_high"] = actual_high
                 result_row["actual_low"] = actual_low
+                result_row["future_high"] = None
+                result_row["future_low"] = None
 
                 price = _find_column_value(row, price_column_names)
                 today_low = _find_column_value(row, low_column_names) or price
@@ -175,12 +177,7 @@ def analyze_stock_data(
                 # NEW: Fallback to intraday 15-min data if needed
                 # -------------------------------------------------------
                 if generation_time and gen_time_obj and not stocks.empty:
-                    need_high_check = (today_high is not None and actual_high is not None
-                                       and float(today_high) >= actual_high)
-                    need_low_check = (today_low is not None and actual_low is not None
-                                      and float(today_low) <= actual_low)
-
-                    if need_high_check or need_low_check:
+                    if True:
                         # Fetch intraday 15-minute bars
                         try:
                             intraday = yf.download(
@@ -200,8 +197,8 @@ def analyze_stock_data(
                                     intraday.index = intraday.index.tz_localize('UTC')
                                 intraday_ist = intraday.index.tz_convert(ist)
 
-                                # Filter bars after generation_time
-                                future_bars = intraday[intraday_ist.time > gen_time_obj]
+                                # Filter bars on target date and after generation_time
+                                future_bars = intraday[(intraday_ist.date == start_dt.date()) & (intraday_ist.time > gen_time_obj)]
 
                                 if not future_bars.empty:
                                     # Extract high and low columns (handle MultiIndex)
@@ -217,34 +214,14 @@ def analyze_stock_data(
                                     future_high = float(future_high_vals.max())
                                     future_low = float(future_low_vals.min())
 
-                                    # Override high-based metrics if needed
-                                    if need_high_check:
-                                        if float(today_high) < future_high:
-                                            result_row["is_high"] = 1
-                                            result_row["actual_high"] = future_high
-                                            if price is not None:
-                                                try:
-                                                    result_row["gain"] = round(future_high - float(price), 2)
-                                                except (ValueError, TypeError):
-                                                    result_row["gain"] = 0
-                                        else:
-                                            result_row["is_high"] = 0
-                                            result_row["gain"] = 0
+                                    result_row["future_high"] = future_high
+                                    result_row["future_low"] = future_low
 
-                                    # Override low-based metrics if needed
-                                    if need_low_check:
-                                        if float(today_low) > future_low:
-                                            result_row["is_low"] = 1
-                                            result_row["actual_low"] = future_low
-                                            if price is not None:
-                                                try:
-                                                    result_row["reverse_gain"] = round(float(price) - future_low, 2)
-                                                except (ValueError, TypeError):
-                                                    result_row["reverse_gain"] = 0
-                                        else:
-                                            result_row["is_low"] = 0
-                                            result_row["reverse_gain"] = 0
-                                # else: no future bars (after hours) -> leave daily-based values (is_high=0, gain=0)
+                                    if price is not None:
+                                        result_row["gain"] = round(future_high - float(price), 2)
+                                        result_row["reverse_gain"] = round(float(price) - future_low, 2)
+                                        result_row["is_high"] = 1 if result_row["gain"] > 0 else 0
+                                        result_row["is_low"] = 1 if result_row["reverse_gain"] > 0 else 0
                         except Exception as e:
                             # Intraday fetch failed -> keep daily-based result (no break)
                             pass
