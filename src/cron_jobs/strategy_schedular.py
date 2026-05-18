@@ -46,6 +46,7 @@ from src.tools.utils.chartink_scraper import fetch_chartink_data
 from src.tools.utils.news_scraper import scrape_news_from_groww
 from src.core.notification_manager import notification_manager
 from src.tools.utils.technical_analysis_utils import calculate_roc
+from src.tools.utils.market_depth_capture import capture_market_depth
 
 
 # =============================================================================
@@ -160,6 +161,16 @@ def clean_old_cache():
             except OSError as e:
                 logger.warning(f"⚠️  Could not delete {f.name}: {e}")
 
+    #in buyer_seller_details forlder remove all files
+    # buyer_seller_details_path = Path("buyer_seller_details")
+    # if buyer_seller_details_path.exists():
+    #     for f in buyer_seller_details_path.iterdir():
+    #         if f.is_file() and f.suffix == ".xlsx":
+    #             logger.info(f"🗑️  Removing old cache: {f.name}")
+    #             try:
+    #                 f.unlink()
+    #             except OSError as e:
+    #                 logger.warning(f"⚠️  Could not delete {f.name}: {e}")
 
 def save_to_excel(data: list[dict], slot_label: str) -> str:
     """Save filtered stock data with news to an Excel file. Returns filepath."""
@@ -294,8 +305,52 @@ def save_to_excel(data: list[dict], slot_label: str) -> str:
 # =============================================================================
 
 
-async def run_strategy_job(slot_index: int, slot_label: str):
+def _run_market_depth_captures_in_background(stocks: list, slot_label: str):
+    """
+    Synchronous wrapper to run market depth captures sequentially in a separate process.
+    This prevents the main event loop from starving or waiting.
+    """
+    import asyncio
+    import os
+    import sys
+    import logging
+    from src.tools.utils.market_depth_capture import capture_market_depth
 
+    logger = logging.getLogger("strategy_scheduler_bg")
+    if not logger.handlers:
+        logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+
+    if os.getenv("ENVIRONMENT_OS", sys.platform) == "win32":
+        asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
+    async def run_all():
+        for stock in stocks:
+            ticker = stock.get("ticker", "")
+            if not ticker:
+                continue
+            news_list = stock.get("news", [])
+            stock_url = news_list[0].get("url") if news_list else None
+
+            try:
+                res = await capture_market_depth(
+                    ticker=ticker,
+                    slot_label=slot_label,
+                    stock_page_url=stock_url
+                )
+                if res:
+                    logger.info(f"  ✅ {ticker} depth screenshot -> {res}")
+                else:
+                    logger.warning(f"  ⚠️ {ticker} depth screenshot failed")
+            except Exception as e:
+                logger.warning(f"  ⚠️ {ticker} depth capture error: {e}")
+
+    try:
+        asyncio.run(run_all())
+    except Exception as e:
+        logger.error(f"❌ Background market depth capture failed: {e}", exc_info=True)
+
+
+async def run_strategy_job(slot_index: int, slot_label: str):
     EMAIL_RECIPIENT = []
     conn = get_db_connection()
     with conn.cursor() as cur:
@@ -376,7 +431,7 @@ async def run_strategy_job(slot_index: int, slot_label: str):
             price = parse_number(row[price_idx]) if price_idx < len(row) else 0
             volume = parse_number(row[volume_idx]) if volume_idx < len(row) else 0
 
-            if price >= MIN_PRICE and volume >= min_volume:
+            if "ETF" not in name.upper() and price >= MIN_PRICE and volume >= min_volume:
                 filtered_stocks.append({
                     "name": name,
                     "ticker": ticker,
@@ -436,7 +491,7 @@ async def run_strategy_job(slot_index: int, slot_label: str):
 
     #store 52week high value also
     for stock in stocks_with_recent_news:
-        s = yf.Ticker(f"{stock["ticker"]}.NS")
+        s = yf.Ticker(f"{stock['ticker']}.NS")
         fifty_two_week_high = s.info.get('fiftyTwoWeekHigh')
         stock["52weekHigh"] = max(fifty_two_week_high, stock["price"])
 
@@ -457,21 +512,11 @@ async def run_strategy_job(slot_index: int, slot_label: str):
         try:
             roc_value = await asyncio.to_thread(calculate_roc, stock["ticker"], period=12, interval="5m")
             stock["roc"] = roc_value
-            #start from 9:15 priod change according to time, like at 9:20 period = 2, 9:25 period = 3 etc
 
-            #ERROR:2026-05-04 11:56:21,777 - strategy_scheduler - WARNING - ⚠️ ROC calculation failed for IDEAFORGE: can't subtract offsett-naive and offset-aware datetimes
-
-            #Correct way to calculate roc for current time
-            #Get today's date without time information
             today = datetime.now(IST).date()
-
-            #Create a timezone-aware datetime for 9:15 AM on today
             start_time = datetime.combine(today, time(9, 15), tzinfo=IST)
-
-            #Get current time as timezone-aware datetime
             current_time = datetime.now(IST)
 
-            # Calculate period in minutes (300 seconds = 5 minutes)
             minutes_diff = (current_time - start_time).total_seconds() // 300
             period = max(1, int(minutes_diff))
             today_roc_value = await asyncio.to_thread(calculate_roc, stock["ticker"], period=period, interval="5m")
@@ -494,8 +539,6 @@ async def run_strategy_job(slot_index: int, slot_label: str):
     # -----------------------------------------------------------------
     # Step 6: Send email report
     # -----------------------------------------------------------------
-
-    
     try:
         send_mail(
             recipient=",".join(EMAIL_RECIPIENT),
@@ -506,6 +549,27 @@ async def run_strategy_job(slot_index: int, slot_label: str):
     except Exception as e:
         logger.error(f"❌ Email sending failed: {e}", exc_info=True)
     
+    # -----------------------------------------------------------------
+    # Step 6.5: Capture Market Depth screenshots for each stock
+    # -----------------------------------------------------------------
+    logger.info(f"📸 Dispatching market depth capture for {len(stocks_with_recent_news)} stock(s) to background process...")
+
+    if stocks_with_recent_news:
+        try:
+            from src.core.multi_processor import process_pool
+            if process_pool:
+                loop = asyncio.get_running_loop()
+                loop.run_in_executor(
+                    process_pool,
+                    _run_market_depth_captures_in_background,
+                    stocks_with_recent_news,
+                    slot_label
+                )
+            else:
+                logger.warning("⚠️ No process_pool available, skipping market depth capture.")
+        except Exception as e:
+            logger.error(f"❌ Failed to dispatch market depth capture to background process: {e}")
+
     # -----------------------------------------------------------------
     # Step 7: Broadcast notifications to frontend
     # -----------------------------------------------------------------

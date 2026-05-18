@@ -452,7 +452,7 @@ def stocks_to_excel(stocks: list, title: str = "report") -> str:
         has_news = any(s.get("news") for s in stocks)
 
         # Build headers
-        col_headers = ["#", "Ticker", "Name", "Price", "TodayHigh","52weekHigh","Volume", "% Change", "ROC (5-5)","ROC Today"]
+        col_headers = ["#", "Ticker", "Name", "Price", "TodayHigh", "TodayLow", "52weekHigh", "Volume", "% Change", "ROC (5-5)","ROC Today", "Diff ROC"]
         if has_technical:
             col_headers.extend(["Trend", "RSI", "MACD", "MACD Signal", "MACD Hist", "ADX"])
         if has_fundamental:
@@ -475,15 +475,15 @@ def stocks_to_excel(stocks: list, title: str = "report") -> str:
             indicators = stock.get("indicators", {})
             fund = stock.get("fundamental_data", {})
             news_list = stock.get("news", [])
-            s = yf.Ticker(f"{stock["ticker"]}.NS")
-            week_high = s.info["fiftyTwoWeekHigh"]
+            s = yf.Ticker(f"{stock['ticker']}.NS")
+            week_high = s.info.get("fiftyTwoWeekHigh", None)
             hist = s.history(period="1d")
             if not hist.empty:
                 today_high = hist['High'].iloc[0]
+                today_low = hist['Low'].iloc[0]
             else:
                 today_high = None
-            
-            today_high = today_high
+                today_low = None
             
             roc = calculate_roc(stock["ticker"], 12, "5m")
             
@@ -500,6 +500,7 @@ def stocks_to_excel(stocks: list, title: str = "report") -> str:
             period = max(1, int(minutes_diff))
             today_roc_value = calculate_roc(stock["ticker"], period=period, interval="5m")
 
+            diff_roc = today_roc_value - roc if today_roc_value is not None and roc is not None else 0
 
             row = [
                 idx,
@@ -507,11 +508,13 @@ def stocks_to_excel(stocks: list, title: str = "report") -> str:
                 stock.get("name", ""),
                 stock.get("price", 0),
                 today_high,
+                today_low,
                 week_high,
                 stock.get("volume", 0),
                 stock.get("percent_change", 0),
-                round(roc, 2),
-                round(today_roc_value, 2),
+                round(roc, 2) if roc is not None else 0,
+                round(today_roc_value, 2) if today_roc_value is not None else 0,
+                round(diff_roc, 2),
             ]
 
             if has_technical:

@@ -1,5 +1,3 @@
-capture_market_Depth.py:
-
 import asyncio
 import os
 import sys
@@ -173,6 +171,10 @@ async def capture_market_depth(
                 resolved_url = re.sub(r"/(market-)?news/?$", "", resolved_url.strip()).rstrip("/")
                 if resolved_url != page.url:
                     await page.goto(resolved_url, timeout=30000)
+                
+                #cache it for future use
+                new_resolved_url = resolved_url + "/market-news"
+                cache_path.write_text(json.dumps({ticker: new_resolved_url}))
 
             await dismiss_overlays(page)
             # Extra wait for the market depth section/lazy elements to load
@@ -204,36 +206,3 @@ async def capture_market_depth(
             return None
         finally:
             await browser.close()
-
-
-calling funtion:
-
-
-
-# -----------------------------------------------------------------
-    # Step 6.5: Capture Market Depth screenshots for each stock
-    # -----------------------------------------------------------------
-    logger.info(f"📸 Capturing Market Depth screenshots for {len(stocks_with_recent_news)} stock(s)...")
-    for stock in stocks_with_recent_news:
-        ticker = stock.get("ticker", "")
-        if not ticker:
-            continue
-        try:
-            # Check if we have the news url in the news list
-            news_list = stock.get("news", [])
-            stock_url = None
-            if news_list:
-                stock_url = news_list[0].get("url")
-            
-            saved_path = await capture_market_depth(
-                ticker=ticker,
-                slot_label=slot_label,
-                stock_page_url=stock_url,
-            )
-            if saved_path:
-                logger.info(f"  ✅ {ticker} depth screenshot -> {saved_path}")
-            else:
-                logger.warning(f"  ⚠️ {ticker} depth screenshot failed")
-        except Exception as e:
-            logger.warning(f"  ⚠️ Market depth capture error for {ticker}: {e}")
-    

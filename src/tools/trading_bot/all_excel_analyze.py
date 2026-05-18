@@ -71,11 +71,12 @@ def makeTool(router):
                             records = df.to_dict(orient="records")
                             data_payload = {"file": records}
 
-                            # Call analyze utility WITH generation_time
+                            # Call analyze utility WITH generation_time and slot
                             result = analyze_stock_data(
                                 data_payload,
                                 date_str,
-                                generation_time=gen_time   # <-- pass extracted time
+                                generation_time=gen_time,  # <-- pass extracted time
+                                slot=slot_label            # <-- pass extracted slot
                             )
 
                             if result.get("status") == "success":

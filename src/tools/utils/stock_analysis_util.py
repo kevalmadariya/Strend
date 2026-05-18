@@ -1,8 +1,13 @@
 import json
+import os
+import re
 from datetime import datetime, timedelta, time
 import yfinance as yf
 import pytz  # make sure pytz is installed
 import pandas as pd
+import pytesseract
+from PIL import Image
+import io
 
 
 def analyze_stock_data(
@@ -14,7 +19,8 @@ def analyze_stock_data(
     price_column_names=None,
     add_exchange_suffix=True,
     exchange_suffix='.NS',
-    generation_time=None  # <-- NEW parameter
+    generation_time=None,  # <-- NEW parameter
+    slot=None              # <-- NEW parameter
 ):
     """
     ... (docstring unchanged, but mention generation_time as optional "HHMM" string)
@@ -70,6 +76,22 @@ def analyze_stock_data(
             except Exception:
                 gen_time_obj = None  # fallback: treat as no time constraint
 
+        # Locate the buyer_seller_details directory and corresponding slot folder dynamically
+        current_dir = os.path.abspath(os.path.dirname(__file__))
+        project_root = os.path.abspath(os.path.join(current_dir, "..", "..", ".."))
+        buyer_seller_base = os.path.join(project_root, "buyer_seller_details")
+        target_slot_folder = None
+        if slot and os.path.exists(buyer_seller_base):
+            for d in os.listdir(buyer_seller_base):
+                if os.path.isdir(os.path.join(buyer_seller_base, d)) and slot in d:
+                    target_slot_folder = os.path.join(buyer_seller_base, d)
+                    break
+
+        # Define expected OCR columns
+        ocr_expected_cols = ['buy_order(%)', 'sell_order(%)', 'bid', 'ask']
+        for i in range(1, 6):
+            ocr_expected_cols.extend([f'bid_price_{i}', f'bid_qty_{i}', f'ask_price_{i}', f'ask_qty_{i}'])
+
         for idx, row in enumerate(rows):
             ticker = _find_column_value(row, ticker_column_names)
 
@@ -82,6 +104,8 @@ def analyze_stock_data(
                 result_row["is_low"] = None
                 result_row["gain"] = None
                 result_row["reverse_gain"] = None
+                for col in ocr_expected_cols:
+                    result_row[col] = None
                 result_rows.append(result_row)
                 continue
 
@@ -127,7 +151,7 @@ def analyze_stock_data(
                 result_row["actual_low"] = actual_low
                 result_row["future_high"] = None
                 result_row["future_low"] = None
-
+                
                 price = _find_column_value(row, price_column_names)
                 today_low = _find_column_value(row, low_column_names) or price
                 today_high = _find_column_value(row, high_column_names) or price
@@ -226,6 +250,20 @@ def analyze_stock_data(
                             # Intraday fetch failed -> keep daily-based result (no break)
                             pass
 
+                # -------------------------------------------------------
+                # NEW: Perform OCR if target_slot_folder is found
+                # -------------------------------------------------------
+                ocr_data = {}
+                if target_slot_folder:
+                    img_path = os.path.join(target_slot_folder, f"{ticker}.png")
+                    if os.path.exists(img_path):
+                        ocr_text = perform_ocr_on_image(img_path)
+                        ocr_data = parse_market_depth_ocr(ocr_text)
+
+                # Append OCR columns at the very end to guarantee they appear last
+                for col in ocr_expected_cols:
+                    result_row[col] = ocr_data.get(col, None)
+
                 result_rows.append(result_row)
 
             except Exception as e:
@@ -238,6 +276,8 @@ def analyze_stock_data(
                 result_row["gain"] = 0
                 result_row["reverse_gain"] = 0
                 result_row["error"] = f"Failed to fetch data for {ticker}: {str(e)}"
+                for col in ocr_expected_cols:
+                    result_row[col] = None
                 result_rows.append(result_row)
 
         # Sort (unchanged)
@@ -299,3 +339,62 @@ def parse_excel_json(data):
     
     # Fallback
     return [], []
+
+
+def perform_ocr_on_image(image_path):
+    """
+    Utility function for OCR that takes an image path and returns the text as a string.
+    """
+    import sys
+    import shutil
+    
+    # Configure pytesseract path on Windows if tesseract is not in system PATH
+    if sys.platform.startswith('win') and not shutil.which("tesseract"):
+        common_paths = [
+            r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+            r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+            os.path.expandvars(r"%LOCALAPPDATA%\Programs\Tesseract-OCR\tesseract.exe")
+        ]
+        for p in common_paths:
+            if os.path.exists(p):
+                pytesseract.pytesseract.tesseract_cmd = p
+                break
+
+    try:
+        image = Image.open(image_path)
+        text = pytesseract.image_to_string(image)
+        return text
+    except Exception as e:
+        print(f"OCR Error for {image_path}: {e}")
+        return ""
+
+
+def parse_market_depth_ocr(text):
+    """
+    Parses market depth text extracted via OCR and returns a structured dictionary.
+    """
+    data = {}
+    if not text:
+        return data
+    
+    # Extract Buy/Sell %
+    buy_sell_match = re.search(r'([\d\.]+)%\s+([\d\.]+)%', text)
+    if buy_sell_match:
+        data['buy_order(%)'] = float(buy_sell_match.group(1))
+        data['sell_order(%)'] = float(buy_sell_match.group(2))
+        
+    # Extract rows of bid/ask
+    rows = re.findall(r'([\d,\.]+)\s+(\d+)\D*\s+([\d,\.]+)\s+(\d+)', text)
+    for i, r in enumerate(rows[:5]):
+        data[f'bid_price_{i+1}'] = float(r[0].replace(',', '')) if r[0] else None
+        data[f'bid_qty_{i+1}'] = int(r[1]) if r[1] else None
+        data[f'ask_price_{i+1}'] = float(r[2].replace(',', '')) if r[2] else None
+        data[f'ask_qty_{i+1}'] = int(r[3]) if r[3] else None
+        
+    # Extract Totals
+    totals = re.search(r'Bid Total\s+([\d,\.]+)\s+Ask Total\s+([\d,\.]+)', text)
+    if totals:
+        data['bid'] = int(totals.group(1).replace(',', ''))
+        data['ask'] = int(totals.group(2).replace(',', ''))
+        
+    return data

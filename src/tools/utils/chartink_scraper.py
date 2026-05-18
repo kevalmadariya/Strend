@@ -3,7 +3,7 @@ import asyncio
 import sys
 import io
 import csv
-
+import re
 import os
 from dotenv import load_dotenv
 load_dotenv()
@@ -60,21 +60,31 @@ async def fetch_chartink_data(
             await take_shot("02_query_filled")
             
             #click enter
-            await page.keyboard.press("Enter")
-            await page.wait_for_timeout(13000)
-            await take_shot("002_enter_pressed")
+            # await page.keyboard.press("Enter")
+            # await page.wait_for_timeout(13000)
+            # await take_shot("002_enter_pressed")
             
-            # print("⚙️ Clicking 'Generate' button")
-            # generate_btn_selector = "button:has-text('Generate')"
-            # await page.click(generate_btn_selector)
-            # await page.wait_for_timeout(1000)
-            # await take_shot("03_after_generate")
+            print("⚙️ Clicking 'Generate' button (robust selector)")
+            generate_btn = (
+                page.get_by_role("button", name=re.compile(r"generate", re.IGNORECASE))
+                .or_(page.locator("button:has-text('Generate'), [role='button']:has-text('Generate')"))
+                .or_(page.locator("[aria-label*='generate' i], [title*='generate' i]"))
+                .first
+            )
+            await generate_btn.click()
+            await page.wait_for_timeout(1000)
+            await take_shot("03_after_generate")
 
-            # print("▶️ Clicking 'Run Scan' button")
-            # run_scan_selector = "div[title='Click to run scan']"
-            # await page.click(run_scan_selector)
-            # await page.wait_for_timeout(12000)
-            # await take_shot("04_after_run_scan")
+            print("▶️ Clicking 'Run Scan' button (robust selector)")
+            run_scan_btn = (
+                page.get_by_role("button", name=re.compile(r"run scan", re.IGNORECASE))
+                .or_(page.locator("[role='button']:has-text('Run Scan'), div:has-text('Run Scan')"))
+                .or_(page.locator("[title*='run scan' i], [aria-label*='run scan' i]"))
+                .first
+            )
+            await run_scan_btn.click()
+            await page.wait_for_timeout(12000)
+            await take_shot("04_after_run_scan")
 
         # ── Set rows-per-page so we get 20 * total_pages entries ──────────────
         entries_to_show = 20 * total_pages

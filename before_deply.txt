@@ -1,0 +1,3 @@
+in stock_analysis_util.py:
+    there is static path using for OCR...
+
