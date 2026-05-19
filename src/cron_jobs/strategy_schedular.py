@@ -552,23 +552,23 @@ async def run_strategy_job(slot_index: int, slot_label: str):
     # -----------------------------------------------------------------
     # Step 6.5: Capture Market Depth screenshots for each stock
     # -----------------------------------------------------------------
-    logger.info(f"📸 Dispatching market depth capture for {len(stocks_with_recent_news)} stock(s) to background process...")
+    # logger.info(f"📸 Dispatching market depth capture for {len(stocks_with_recent_news)} stock(s) to background process...")
 
-    if stocks_with_recent_news:
-        try:
-            from src.core.multi_processor import process_pool
-            if process_pool:
-                loop = asyncio.get_running_loop()
-                loop.run_in_executor(
-                    process_pool,
-                    _run_market_depth_captures_in_background,
-                    stocks_with_recent_news,
-                    slot_label
-                )
-            else:
-                logger.warning("⚠️ No process_pool available, skipping market depth capture.")
-        except Exception as e:
-            logger.error(f"❌ Failed to dispatch market depth capture to background process: {e}")
+    # if stocks_with_recent_news:
+    #     try:
+    #         from src.core.multi_processor import process_pool
+    #         if process_pool:
+    #             loop = asyncio.get_running_loop()
+    #             loop.run_in_executor(
+    #                 process_pool,
+    #                 _run_market_depth_captures_in_background,
+    #                 stocks_with_recent_news,
+    #                 slot_label
+    #             )
+    #         else:
+    #             logger.warning("⚠️ No process_pool available, skipping market depth capture.")
+    #     except Exception as e:
+    #         logger.error(f"❌ Failed to dispatch market depth capture to background process: {e}")
 
     # -----------------------------------------------------------------
     # Step 7: Broadcast notifications to frontend
